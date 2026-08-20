@@ -1,0 +1,124 @@
+import { Module, Logger } from '@nestjs/common';
+import { MastraModule as NestMastraModule } from '@mastra/nestjs';
+import { Mastra } from '@mastra/core/mastra';
+import { Memory } from '@mastra/memory';
+import { PostgresStore } from '@mastra/pg';
+import { ContactsModule } from '../contacts/contacts.module';
+import { AppointmentsModule } from '../appointments/appointments.module';
+import { ContactsService } from '../contacts/contacts.service';
+import { AppointmentsService } from '../appointments/appointments.service';
+import { createBookingAgent, TEMPLATE_AGENT_ID } from './booking-agent';
+
+export { NestMastraModule };
+
+@Module({
+  imports: [
+    ContactsModule,
+    AppointmentsModule,
+    NestMastraModule.registerAsync({
+      imports: [ContactsModule, AppointmentsModule],
+      useFactory: (
+        contactsService: ContactsService,
+        appointmentsService: AppointmentsService,
+      ) => {
+        const databaseUrl =
+          process.env.DATABASE_URL ||
+          'postgresql://crm:crm@localhost:5432/crm_academy';
+
+        const store = new PostgresStore({ id: 'crm-academy', connectionString: databaseUrl });
+        const memory = new Memory({ storage: store });
+
+        const logger = new Logger('AgentTools');
+        // Mastra swallows tool errors (feeds them back to the model) — log them here
+        const traced = <A extends any[], R>(name: string, fn: (...args: A) => Promise<R>) =>
+          async (...args: A): Promise<R> => {
+            try {
+              return await fn(...args);
+            } catch (err) {
+              // Do not log args — they contain customer PII (phone, ids, names).
+              logger.error(`Tool ${name} failed: ${err}`);
+              throw err;
+            }
+          };
+
+        // Pure data operations. Per-agent config (services, hours, timezone) is
+        // read from requestContext inside the tools, not here.
+        const deps = {
+          findContactByPhone: async (phone: string) => {
+            return contactsService.findByPhone(phone);
+          },
+          createContact: async (phone: string, name?: string) => {
+            return contactsService.upsertByPhone(phone, name);
+          },
+          updateContact: async (
+            contactId: string,
+            fields: { name?: string; email?: string },
+          ) => {
+            return contactsService.update(contactId, fields);
+          },
+          getAvailableSlots: traced('getAvailableSlots', async (
+            date: string,
+            durationMinutes: number,
+            workingHours: any[],
+            timezone: string,
+            calendarId?: string,
+          ) => {
+            const slots = await appointmentsService.getAvailableSlots(
+              new Date(date),
+              durationMinutes,
+              workingHours,
+              timezone,
+              new Date(),
+              calendarId || 'default',
+            );
+            return slots.map((s) => ({
+              startsAt: s.startsAt.toISOString(),
+              endsAt: s.endsAt.toISOString(),
+            }));
+          }),
+          bookAppointment: traced('bookAppointment', async (
+            contactId: string,
+            service: string,
+            startsAt: string,
+            durationMinutes: number,
+            price?: string,
+            calendarId?: string,
+            status?: string,
+            serviceId?: string,
+          ) => {
+            const start = new Date(startsAt);
+            const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+            return appointmentsService.create({
+              contactId,
+              service,
+              startsAt: start.toISOString(),
+              endsAt: end.toISOString(),
+              price,
+              calendarId: calendarId || 'default',
+              status: (status as any) || undefined,
+              serviceId,
+            });
+          }),
+          listContactAppointments: async (contactId: string) => {
+            return appointmentsService.findByContact(contactId);
+          },
+          cancelAppointment: async (appointmentId: string) => {
+            return appointmentsService.cancelAppointment(appointmentId);
+          },
+        };
+
+        const agent = createBookingAgent(deps, memory);
+
+        const mastra = new Mastra({
+          agents: { [TEMPLATE_AGENT_ID]: agent },
+          storage: store,
+        });
+
+        return { mastra };
+      },
+      inject: [ContactsService, AppointmentsService],
+    }),
+  ],
+  exports: [NestMastraModule],
+})
+export class AppMastraModule {}
