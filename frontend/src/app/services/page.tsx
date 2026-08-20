@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, CheckCircle2, AlertCircle } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, AlertCircle } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { Service, User } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
@@ -44,9 +44,8 @@ export default function ServicesPage() {
     isActive: true,
   });
 
-  async function loadData() {
+  const refreshData = useCallback(async () => {
     try {
-      setLoading(true);
       const [svcs, mgrs] = await Promise.all([
         apiFetch<Service[]>("/api/services"),
         apiFetch<User[]>("/api/services/managers/list"),
@@ -58,11 +57,29 @@ export default function ServicesPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [toast]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    let active = true;
+    Promise.all([
+      apiFetch<Service[]>("/api/services"),
+      apiFetch<User[]>("/api/services/managers/list"),
+    ])
+      .then(([svcs, mgrs]) => {
+        if (!active) return;
+        setServices(svcs);
+        setManagers(mgrs);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        toast.error("Error al cargar los servicios");
+        setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [toast]);
 
   function openCreate() {
     setEditingService(null);
@@ -136,7 +153,7 @@ export default function ServicesPage() {
         toast.success("Servicio creado correctamente");
       }
       setModalOpen(false);
-      await loadData();
+      await refreshData();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error al guardar el servicio");
     } finally {
