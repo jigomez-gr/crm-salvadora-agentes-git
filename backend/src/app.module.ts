@@ -18,6 +18,7 @@ import { KnowledgeDocument } from './common/entities/knowledge-document.entity';
 import { KnowledgeChunk } from './common/entities/knowledge-chunk.entity';
 import { EmailAccount } from './common/entities/email-account.entity';
 import { EmailMessage } from './common/entities/email-message.entity';
+import { PaymentAccount } from './common/entities/payment-account.entity';
 import { Service } from './common/entities/service.entity';
 import { ContactsModule } from './contacts/contacts.module';
 import { AppointmentsModule } from './appointments/appointments.module';
@@ -36,6 +37,7 @@ import { AuditModule } from './audit/audit.module';
 import { SettingsModule } from './settings/settings.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
 import { EmailModule } from './email/email.module';
+import { PaymentsModule } from './payments/payments.module';
 import { AgentsModule } from './agents/agents.module';
 // IMPORTANT: AgentsModule (which imports AppMastraModule with NestMastraModule) MUST be last.
 // NestMastraModule mounts catch-all routes under /api; importing it earlier returns 404s
@@ -69,6 +71,7 @@ import { AgentsModule } from './agents/agents.module';
         KnowledgeChunk,
         EmailAccount,
         EmailMessage,
+        PaymentAccount,
       ],
       migrations: [join(__dirname, 'migrations', '*.{js,ts}')],
       // DEV: derive the schema from the entities for a zero-config experience.
@@ -93,6 +96,8 @@ import { AgentsModule } from './agents/agents.module';
     KnowledgeModule,
     // Business email (SMTP) — Mastra-free, before AgentsModule's catch-all.
     EmailModule,
+    // Payments (Stripe Checkout, Bizum, Webhooks) — Mastra-free, before AgentsModule
+    PaymentsModule,
     EventsModule,
     WhatsappModule,
     SeedModule,

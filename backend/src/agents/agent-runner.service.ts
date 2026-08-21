@@ -237,12 +237,40 @@ export class AgentRunnerService {
     // never has to handle the contact id itself (the booking/list tools read it
     // from here). A new WhatsApp contact starts with name === phone, so treat
     // that as "name not known yet".
-    if (contactId || phone) {
-      const nameKnown = !!(contactName && contactName !== phone);
+    let effectiveContactId = contactId;
+    let effectivePhone = phone;
+    let effectiveName = contactName;
+
+    if (channel === MessageChannel.PLAYGROUND && !effectiveContactId) {
+      try {
+        const playgroundPhone = '+34600000000';
+        let playgroundContact = await this.contactsService
+          .findByPhone(playgroundPhone)
+          .catch(() => null);
+        if (!playgroundContact) {
+          playgroundContact = await this.contactsService
+            .create({
+              phone: playgroundPhone,
+              name: 'Usuario Playground',
+            })
+            .catch(() => null);
+        }
+        if (playgroundContact) {
+          effectiveContactId = playgroundContact.id;
+          effectivePhone = playgroundContact.phone;
+          effectiveName = playgroundContact.name;
+        }
+      } catch {
+        // non-fatal playground fallback
+      }
+    }
+
+    if (effectiveContactId || effectivePhone) {
+      const nameKnown = !!(effectiveName && effectiveName !== effectivePhone);
       requestContext.set('customer', {
-        contactId,
-        phone,
-        name: nameKnown ? contactName : undefined,
+        contactId: effectiveContactId,
+        phone: effectivePhone,
+        name: nameKnown ? effectiveName : undefined,
         nameKnown,
       });
     }

@@ -65,4 +65,14 @@ export class EventsController {
   onContactUpdated(payload: unknown) {
     this.subject.next({ eventName: 'contact.updated', payload });
   }
+
+  @OnEvent('appointment.updated')
+  onAppointmentUpdated(payload: unknown) {
+    this.subject.next({ eventName: 'appointment.updated', payload });
+  }
+
+  @OnEvent('payment.received')
+  onPaymentReceived(payload: unknown) {
+    this.subject.next({ eventName: 'payment.received', payload });
+  }
 }

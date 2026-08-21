@@ -1,4 +1,4 @@
-﻿import { IsString, IsNotEmpty, IsOptional, IsNumber, Min, IsBoolean, IsUUID } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsNumber, Min, IsBoolean, IsUUID } from 'class-validator';
 
 export class CreateServiceDto {
   @IsString()
@@ -26,6 +26,42 @@ export class CreateServiceDto {
   @IsOptional()
   managerId?: string;
 
+  @IsString()
+  @IsOptional()
+  serviceType?: string;
+
+  @IsString()
+  @IsOptional()
+  eventDatesText?: string;
+
+  @IsString()
+  @IsOptional()
+  eventStartDate?: string;
+
+  @IsString()
+  @IsOptional()
+  eventEndDate?: string;
+
+  @IsNumber()
+  @IsOptional()
+  maxCapacity?: number;
+
+  @IsNumber()
+  @IsOptional()
+  minQuorum?: number;
+
+  @IsString()
+  @IsOptional()
+  quorumDeadline?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentType?: string;
+
+  @IsString()
+  @IsOptional()
+  externalPaymentUrl?: string;
+
   @IsBoolean()
   @IsOptional()
   requiresApproval?: boolean;
@@ -44,6 +80,34 @@ export class UpdateServiceDto {
   @IsOptional()
   description?: string;
 
+  @IsString()
+  @IsOptional()
+  serviceType?: string;
+
+  @IsString()
+  @IsOptional()
+  eventDatesText?: string;
+
+  @IsString()
+  @IsOptional()
+  eventStartDate?: string;
+
+  @IsString()
+  @IsOptional()
+  eventEndDate?: string;
+
+  @IsNumber()
+  @IsOptional()
+  maxCapacity?: number;
+
+  @IsNumber()
+  @IsOptional()
+  minQuorum?: number;
+
+  @IsString()
+  @IsOptional()
+  quorumDeadline?: string;
+
   @IsNumber()
   @Min(5)
   @IsOptional()
@@ -52,6 +116,14 @@ export class UpdateServiceDto {
   @IsString()
   @IsOptional()
   price?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentType?: string;
+
+  @IsString()
+  @IsOptional()
+  externalPaymentUrl?: string;
 
   @IsString()
   @IsOptional()

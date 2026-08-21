@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, AlertCircle } from "lucide-react";
+import { Plus, Edit2, Sparkles, Calendar, UserCheck, Clock, Tag, AlertCircle, ExternalLink, CreditCard, Compass, Users, CheckCircle2 } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { Service, User } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
@@ -10,12 +10,19 @@ import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { cn } from "@/lib/utils";
 
 interface ServiceFormData {
   name: string;
   description: string;
+  serviceType: "recurring" | "event";
+  eventDatesText: string;
+  maxCapacity: string;
+  minQuorum: string;
   durationMinutes: number;
   price: string;
+  paymentType: "stripe" | "external_url" | "in_person" | "free";
+  externalPaymentUrl: string;
   calendarId: string;
   managerId: string;
   requiresApproval: boolean;
@@ -36,8 +43,14 @@ export default function ServicesPage() {
   const [form, setForm] = useState<ServiceFormData>({
     name: "",
     description: "",
+    serviceType: "recurring",
+    eventDatesText: "",
+    maxCapacity: "",
+    minQuorum: "",
     durationMinutes: 60,
     price: "",
+    paymentType: "stripe",
+    externalPaymentUrl: "",
     calendarId: "",
     managerId: "",
     requiresApproval: false,
@@ -86,8 +99,14 @@ export default function ServicesPage() {
     setForm({
       name: "",
       description: "",
+      serviceType: "recurring",
+      eventDatesText: "",
+      maxCapacity: "",
+      minQuorum: "",
       durationMinutes: 60,
       price: "",
+      paymentType: "stripe",
+      externalPaymentUrl: "",
       calendarId: "",
       managerId: managers[0]?.id ?? "",
       requiresApproval: false,
@@ -102,8 +121,14 @@ export default function ServicesPage() {
     setForm({
       name: svc.name,
       description: svc.description ?? "",
+      serviceType: svc.serviceType ?? "recurring",
+      eventDatesText: svc.eventDatesText ?? "",
+      maxCapacity: svc.maxCapacity ? String(svc.maxCapacity) : "",
+      minQuorum: svc.minQuorum ? String(svc.minQuorum) : "",
       durationMinutes: svc.durationMinutes,
       price: svc.price ?? "",
+      paymentType: svc.paymentType ?? "stripe",
+      externalPaymentUrl: svc.externalPaymentUrl ?? "",
       calendarId: svc.calendarId ?? "",
       managerId: svc.managerId ?? "",
       requiresApproval: Boolean(svc.requiresApproval),
@@ -130,8 +155,14 @@ export default function ServicesPage() {
     const payload = {
       name: form.name.trim(),
       description: form.description.trim() || undefined,
+      serviceType: form.serviceType,
+      eventDatesText: form.eventDatesText.trim() || undefined,
+      maxCapacity: form.maxCapacity ? Number(form.maxCapacity) : undefined,
+      minQuorum: form.minQuorum ? Number(form.minQuorum) : undefined,
       durationMinutes: Number(form.durationMinutes),
       price: form.price.trim() || undefined,
+      paymentType: form.paymentType,
+      externalPaymentUrl: form.externalPaymentUrl.trim() || undefined,
       calendarId: form.calendarId.trim() || undefined,
       managerId: form.managerId || undefined,
       requiresApproval: form.requiresApproval,
@@ -203,7 +234,14 @@ export default function ServicesPage() {
             >
               <div>
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold text-neutral-900 text-base">{s.name}</h3>
+                  <div className="space-y-1">
+                    <h3 className="font-semibold text-neutral-900 text-base">{s.name}</h3>
+                    {s.serviceType === "event" && (
+                      <Badge variant="info" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
+                        Viaje / Evento puntual
+                      </Badge>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1">
                     {s.isActive ? (
                       <Badge variant="success" className="text-[10px]">Activo</Badge>
@@ -219,7 +257,54 @@ export default function ServicesPage() {
                   </p>
                 )}
 
+                {s.serviceType === "event" && (
+                  <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50/80 p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-neutral-800 flex items-center gap-1">
+                        <Users className="h-3.5 w-3.5 text-indigo-600" />
+                        Inscritos: <strong className="text-neutral-900">{s.attendeesCount ?? 0}</strong> {s.maxCapacity ? `/ ${s.maxCapacity} plazas` : "plazas"}
+                      </span>
+                      {s.minQuorum && (
+                        <span className={cn("text-[11px] font-medium flex items-center gap-1", s.quorumReached ? "text-emerald-700 font-semibold" : "text-amber-700")}>
+                          {s.quorumReached ? (
+                            <>
+                              <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Quórum alcanzado
+                            </>
+                          ) : (
+                            `Mín. ${s.minQuorum} personas`
+                          )}
+                        </span>
+                      )}
+                    </div>
+                    {s.maxCapacity && (
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-200">
+                        <div
+                          className={cn(
+                            "h-full transition-all",
+                            (s.attendeesCount ?? 0) >= s.maxCapacity
+                              ? "bg-red-500"
+                              : s.quorumReached
+                              ? "bg-emerald-500"
+                              : "bg-indigo-500"
+                          )}
+                          style={{ width: `${Math.min(100, (((s.attendeesCount ?? 0) / s.maxCapacity) * 100))}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="mt-4 space-y-2 border-t border-neutral-100 pt-3 text-xs">
+                  {s.serviceType === "event" && s.eventDatesText && (
+                    <div className="flex items-center justify-between text-neutral-600">
+                      <span className="flex items-center gap-1.5">
+                        <Compass className="h-3.5 w-3.5 text-purple-600" />
+                        Fechas:
+                      </span>
+                      <span className="font-semibold text-purple-900">{s.eventDatesText}</span>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between text-neutral-600">
                     <span className="flex items-center gap-1.5">
                       <Clock className="h-3.5 w-3.5 text-neutral-400" />
@@ -236,6 +321,36 @@ export default function ServicesPage() {
                     <span className="font-semibold text-neutral-800">
                       {s.price ? `${s.price} €` : "No especificado"}
                     </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-neutral-600">
+                    <span className="flex items-center gap-1.5">
+                      <CreditCard className="h-3.5 w-3.5 text-neutral-400" />
+                      Método de cobro:
+                    </span>
+                    <div>
+                      {s.paymentType === "external_url" ? (
+                        s.externalPaymentUrl ? (
+                          <a
+                            href={s.externalPaymentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:underline"
+                            title={s.externalPaymentUrl}
+                          >
+                            Giglon / Entradas <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : (
+                          <span className="text-[11px] text-amber-600 font-medium">Enlace externo pendiente</span>
+                        )
+                      ) : s.paymentType === "in_person" ? (
+                        <span className="text-[11px] text-neutral-600">En el local</span>
+                      ) : s.paymentType === "free" ? (
+                        <span className="text-[11px] text-emerald-600 font-medium">Gratuito</span>
+                      ) : (
+                        <span className="text-[11px] text-indigo-700 font-medium">Stripe / Bizum</span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between text-neutral-600">
@@ -287,12 +402,46 @@ export default function ServicesPage() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editingService ? "Editar Servicio" : "Nuevo Servicio"}
+        title={editingService ? "Editar Servicio / Evento" : "Nuevo Servicio / Evento"}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="mb-1 block text-xs font-medium text-neutral-700">
-              Nombre del Servicio <span className="text-red-500">*</span>
+              Modalidad del Servicio
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, serviceType: "recurring" }))}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 rounded-lg border p-2 text-xs font-medium transition-colors",
+                  form.serviceType === "recurring"
+                    ? "border-indigo-600 bg-indigo-50 text-indigo-700"
+                    : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"
+                )}
+              >
+                <Calendar className="h-3.5 w-3.5" />
+                Cita periódica habitual
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, serviceType: "event" }))}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 rounded-lg border p-2 text-xs font-medium transition-colors",
+                  form.serviceType === "event"
+                    ? "border-purple-600 bg-purple-50 text-purple-700"
+                    : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"
+                )}
+              >
+                <Compass className="h-3.5 w-3.5" />
+                Viaje / Retiro / Evento
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">
+              Nombre del Servicio o Viaje <span className="text-red-500">*</span>
             </label>
             <Input
               value={form.name}
@@ -304,9 +453,54 @@ export default function ServicesPage() {
                   calendarId: f.calendarId || (editingService ? f.calendarId : `cal-${name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`),
                 }));
               }}
-              placeholder="ej. Clase de Yoga Vinyasa"
+              placeholder="ej. Retiro de Yoga y Meditación en la Sierra"
             />
           </div>
+
+          {form.serviceType === "event" && (
+            <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-3 space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-purple-900">
+                  Fechas del Evento / Viaje <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  value={form.eventDatesText}
+                  onChange={(e) => setForm((f) => ({ ...f, eventDatesText: e.target.value }))}
+                  placeholder="ej. Del 25 al 28 de Octubre de 2026"
+                />
+                <p className="mt-1 text-[11px] text-purple-700">
+                  El agente informará de estas fechas a los clientes que pregunten por el viaje.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-purple-900">
+                    Plazas Máximas (Aforo)
+                  </label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={form.maxCapacity}
+                    onChange={(e) => setForm((f) => ({ ...f, maxCapacity: e.target.value }))}
+                    placeholder="ej. 30"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-purple-900">
+                    Quórum Mínimo Requerido
+                  </label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={form.minQuorum}
+                    onChange={(e) => setForm((f) => ({ ...f, minQuorum: e.target.value }))}
+                    placeholder="ej. 30"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-xs font-medium text-neutral-700">
@@ -379,6 +573,41 @@ export default function ServicesPage() {
               onChange={(e) => setForm((f) => ({ ...f, calendarId: e.target.value }))}
               placeholder="ej. cal-yoga"
             />
+          </div>
+
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50/70 p-3 space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-neutral-700">
+                Forma de Cobro / Venta de Entradas
+              </label>
+              <select
+                className="block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+                value={form.paymentType}
+                onChange={(e) => setForm((f) => ({ ...f, paymentType: e.target.value as any }))}
+              >
+                <option value="stripe">Stripe Automático (Tarjetas, Bizum, Apple/Google Pay)</option>
+                <option value="external_url">Enlace externo (Giglon, Eventbrite, web de entradas...)</option>
+                <option value="in_person">Pago presencial en el local</option>
+                <option value="free">Gratuito / Sin cobro</option>
+              </select>
+            </div>
+
+            {form.paymentType === "external_url" && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-neutral-700">
+                  URL de venta de entradas / Giglon <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="url"
+                  value={form.externalPaymentUrl}
+                  onChange={(e) => setForm((f) => ({ ...f, externalPaymentUrl: e.target.value }))}
+                  placeholder="https://www.giglon.com/todos?idEvent=cantar-del-alma"
+                />
+                <p className="mt-1 text-[11px] text-neutral-500">
+                  El agente de WhatsApp enviará este enlace directamente al cliente para adquirir sus entradas.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2 pt-2">

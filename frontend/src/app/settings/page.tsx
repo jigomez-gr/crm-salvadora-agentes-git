@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ShieldAlert, Upload, Trash2, Bot, Mail, Send } from "lucide-react";
+import { ShieldAlert, Upload, Trash2, Bot, Mail, Send, CreditCard, Copy, Check } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { readableTextColor } from "@/lib/color";
-import { AppSettings, EmailConfig } from "@/lib/types";
+import { AppSettings, EmailConfig, PaymentConfig } from "@/lib/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranding } from "@/contexts/BrandingContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -305,6 +305,192 @@ function EmailCard() {
   );
 }
 
+// ─── Payment (Stripe / Bizum / Card) configuration ──────────────────────────────
+
+function PaymentCard() {
+  const toast = useToast();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [tick, setTick] = useState(0);
+
+  const [publishableKey, setPublishableKey] = useState("");
+  const [secretKey, setSecretKey] = useState<string | null>(null);
+  const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
+  const [currency, setCurrency] = useState("eur");
+  const [enableBizum, setEnableBizum] = useState(true);
+  const [enableCard, setEnableCard] = useState(true);
+
+  const [hasSecretKey, setHasSecretKey] = useState(false);
+  const [hasWebhookSecret, setHasWebhookSecret] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<PaymentConfig>("/api/payments/config")
+      .then((data) => {
+        if (cancelled) return;
+        setPublishableKey(data.publishableKey || "");
+        setHasSecretKey(data.hasSecretKey);
+        setHasWebhookSecret(data.hasWebhookSecret);
+        setCurrency(data.currency || "eur");
+        setEnableBizum(data.enableBizum ?? true);
+        setEnableCard(data.enableCard ?? true);
+        setWebhookUrl(data.webhookUrl || "");
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const payload: Partial<{
+        publishableKey: string;
+        secretKey: string;
+        webhookSecret: string;
+        currency: string;
+        enableBizum: boolean;
+        enableCard: boolean;
+      }> = {
+        publishableKey,
+        currency,
+        enableBizum,
+        enableCard,
+      };
+      if (secretKey && secretKey.trim() !== "") payload.secretKey = secretKey;
+      if (webhookSecret && webhookSecret.trim() !== "") payload.webhookSecret = webhookSecret;
+
+      const updated = await apiFetch<PaymentConfig>("/api/payments/config", {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+
+      setPublishableKey(updated.publishableKey || "");
+      setHasSecretKey(updated.hasSecretKey);
+      setHasWebhookSecret(updated.hasWebhookSecret);
+      setSecretKey(null);
+      setWebhookSecret(null);
+      setTick((t) => t + 1);
+      toast.success("Configuración de Stripe y pagos guardada.");
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Error al guardar pagos.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleCopyWebhook() {
+    if (!webhookUrl) return;
+    navigator.clipboard.writeText(webhookUrl);
+    setCopied(true);
+    toast.success("URL del Webhook copiada al portapapeles.");
+    setTimeout(() => setCopied(false), 2500);
+  }
+
+  if (loading) return null;
+
+  const labelCls = "mb-1 block text-xs font-medium text-neutral-700";
+
+  return (
+    <div className="mt-6 max-w-xl rounded-xl border border-neutral-200 bg-white p-6">
+      <div className="flex items-center gap-2">
+        <CreditCard className="h-4 w-4 text-neutral-500" />
+        <h2 className="text-sm font-semibold text-neutral-800">
+          Pasarela de Pago (Stripe & Bizum)
+        </h2>
+      </div>
+      <p className="mt-1 text-xs text-neutral-500">
+        Permite el cobro de citas y servicios con Tarjeta, Apple Pay, Google Pay y Bizum. El agente de IA puede enviar enlaces de pago automáticos por WhatsApp.
+      </p>
+
+      <div className="mt-4 space-y-4">
+        <div>
+          <label className={labelCls}>Clave Pública (Publishable Key)</label>
+          <Input
+            value={publishableKey}
+            onChange={(e) => setPublishableKey(e.target.value)}
+            placeholder="pk_test_... o pk_live_..."
+          />
+        </div>
+
+        <SecretInput
+          key={`stripe-sk-${tick}`}
+          label="Clave Secreta (Secret Key)"
+          placeholder="sk_test_... o sk_live_..."
+          hasValue={hasSecretKey}
+          value={secretKey}
+          onChange={setSecretKey}
+          hint="Clave privada de Stripe. Nunca se devuelve al navegador por seguridad."
+        />
+
+        <SecretInput
+          key={`stripe-wh-${tick}`}
+          label="Secreto de Firma del Webhook (Signing Secret)"
+          placeholder="whsec_..."
+          hasValue={hasWebhookSecret}
+          value={webhookSecret}
+          onChange={setWebhookSecret}
+          hint="Secreto para verificar la autenticidad de los webhooks de Stripe."
+        />
+
+        <div className="rounded-lg border border-neutral-200 bg-neutral-50/70 p-3.5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-neutral-800">URL del Webhook de Stripe</p>
+              <p className="mt-0.5 text-[11px] text-neutral-500">
+                Pega esta URL en tu Dashboard de Stripe (Eventos: <code className="text-indigo-600">checkout.session.completed</code>)
+              </p>
+            </div>
+            <Button variant="secondary" size="sm" onClick={handleCopyWebhook} type="button">
+              {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? "Copiado" : "Copiar"}
+            </Button>
+          </div>
+          <p className="mt-2 font-mono text-xs text-neutral-700 break-all select-all">
+            {webhookUrl || "http://localhost:3001/api/webhooks/stripe"}
+          </p>
+        </div>
+
+        <div className="pt-2 space-y-2 border-t border-neutral-100">
+          <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enableCard}
+              onChange={(e) => setEnableCard(e.target.checked)}
+              className="h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>Aceptar Tarjetas, Apple Pay y Google Pay</span>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enableBizum}
+              onChange={(e) => setEnableBizum(e.target.checked)}
+              className="h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>Aceptar Bizum (requiere moneda EUR y activación en Stripe)</span>
+          </label>
+        </div>
+
+        <div className="pt-1">
+          <Button onClick={handleSave} disabled={saving}>
+            <Upload className="h-4 w-4" />
+            {saving ? "Guardando…" : "Guardar pagos"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const branding = useBranding();
@@ -493,6 +679,9 @@ export default function SettingsPage() {
 
       {/* Email (SMTP) */}
       <EmailCard />
+
+      {/* Stripe & Bizum Payments */}
+      <PaymentCard />
 
       {/* Danger zone */}
       <div className="mt-6 max-w-xl rounded-xl border border-red-200 bg-red-50/40 p-6">

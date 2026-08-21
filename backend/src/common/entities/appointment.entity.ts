@@ -17,6 +17,14 @@ export enum AppointmentStatus {
   COMPLETED = 'completed',
 }
 
+export enum PaymentStatus {
+  UNPAID = 'unpaid',
+  PENDING = 'pending',
+  PAID = 'paid',
+  REFUNDED = 'refunded',
+  EXEMPT = 'exempt',
+}
+
 @Entity('appointments')
 // Calendar range queries filter by date; the dashboard counts by (status, date).
 @Index(['status', 'startsAt'])
@@ -71,6 +79,26 @@ export class Appointment {
   // Optional price (for future invoicing/deposits). Stored as numeric.
   @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
   price: string | null;
+
+  // ─── Stripe Payment Tracking ───
+  @Column({
+    type: 'enum',
+    enum: PaymentStatus,
+    default: PaymentStatus.UNPAID,
+  })
+  paymentStatus: PaymentStatus;
+
+  @Column({ type: 'varchar', nullable: true })
+  stripeSessionId: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  stripePaymentIntentId: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  paymentUrl: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  paidAt: Date | null;
 
   // ─── Acceptance audit (set when status becomes 'scheduled' from 'pending_approval') ───
   @Column({ type: 'timestamptz', nullable: true })

@@ -12,6 +12,9 @@ import {
   Bell,
   ShieldX,
   Send,
+  CreditCard,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -451,6 +454,8 @@ export default function ContactDetailPage({
 }
 
 function AppointmentList({ appointments }: { appointments: Appointment[] }) {
+  const toast = useToast();
+
   if (appointments.length === 0) {
     return (
       <div className="rounded-xl border border-neutral-200 bg-white p-6 text-center text-sm text-neutral-400">
@@ -459,18 +464,47 @@ function AppointmentList({ appointments }: { appointments: Appointment[] }) {
     );
   }
 
+  function copyPaymentLink(url: string) {
+    navigator.clipboard.writeText(url);
+    toast.success("Enlace de pago copiado al portapapeles.");
+  }
+
   return (
     <div className="divide-y divide-neutral-100 overflow-hidden rounded-xl border border-neutral-200 bg-white">
       {appointments.map((a) => (
-        <div key={a.id} className="flex items-center gap-4 px-4 py-3">
+        <div key={a.id} className="flex items-center justify-between gap-4 px-4 py-3">
           <div className="flex-1">
-            <p className="text-sm font-medium text-neutral-900">{a.service}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium text-neutral-900">{a.service}</p>
+              {a.paymentStatus === "paid" && (
+                <Badge variant="success">Pagado {a.price ? `(${a.price} €)` : ""}</Badge>
+              )}
+              {a.paymentStatus === "pending" && (
+                <Badge variant="warning">Pago pendiente {a.price ? `(${a.price} €)` : ""}</Badge>
+              )}
+              {(!a.paymentStatus || a.paymentStatus === "unpaid") && a.price && (
+                <Badge variant="default">{a.price} €</Badge>
+              )}
+            </div>
             <p className="text-xs text-neutral-500">
               {format(parseISO(a.startsAt), "d 'de' MMM, HH:mm", { locale: es })} →{" "}
               {format(parseISO(a.endsAt), "HH:mm", { locale: es })}
             </p>
           </div>
-          <Badge variant={statusVariant(a.status)}>{statusLabel(a.status)}</Badge>
+          <div className="flex items-center gap-2">
+            {a.paymentUrl && a.paymentStatus !== "paid" && (
+              <button
+                type="button"
+                onClick={() => copyPaymentLink(a.paymentUrl!)}
+                className="inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100"
+                title="Copiar enlace de pago de Stripe"
+              >
+                <Copy className="h-3 w-3" />
+                Link pago
+              </button>
+            )}
+            <Badge variant={statusVariant(a.status)}>{statusLabel(a.status)}</Badge>
+          </div>
         </div>
       ))}
     </div>

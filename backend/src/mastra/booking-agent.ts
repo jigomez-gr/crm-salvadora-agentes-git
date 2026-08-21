@@ -43,6 +43,15 @@ export interface BookingAgentDeps {
   ) => Promise<any>;
   listContactAppointments: (contactId: string) => Promise<any[]>;
   cancelAppointment: (appointmentId: string) => Promise<any>;
+  createPaymentLink?: (params: {
+    appointmentId?: string;
+    contactId?: string;
+    amount: number;
+    title: string;
+    description?: string;
+    customerName?: string;
+    customerEmail?: string;
+  }) => Promise<{ url: string; sessionId: string } | null>;
 }
 
 function getConfig(context: any): any {
@@ -113,7 +122,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   const checkAvailabilityTool = createTool({
     id: 'checkAvailability',
     description:
-      'Check available appointment slots for a given date and service',
+      'Check available appointment slots for a given date and service. Call this tool ALWAYS whenever the customer asks for a day, date, or availability before suggesting any times.',
     inputSchema: z.object({
       date: z
         .string()
@@ -132,11 +141,61 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       const workingHours = config?.workingHours || [];
       const timezone = config?.timezone || 'Europe/Madrid';
 
-      const services: { name: string; durationMinutes: number; calendarId?: string }[] =
-        config?.services || [];
+      const services: {
+        id?: string;
+        name: string;
+        durationMinutes: number;
+        serviceType?: string;
+        eventDatesText?: string | null;
+        eventStartDate?: string | null;
+        eventEndDate?: string | null;
+        maxCapacity?: number | null;
+        minQuorum?: number | null;
+        attendeesCount?: number;
+        availableSeats?: number | null;
+        quorumReached?: boolean;
+        calendarId?: string;
+      }[] = config?.services || [];
       const svc = inputData.service
         ? services.find((s) => s.name === inputData.service)
         : undefined;
+
+      if (svc?.serviceType === 'event') {
+        const remaining =
+          svc.availableSeats !== undefined && svc.availableSeats !== null
+            ? svc.availableSeats
+            : svc.maxCapacity;
+        return {
+          isEvent: true,
+          service: svc.name,
+          datesText:
+            svc.eventDatesText ||
+            (svc.eventStartDate
+              ? new Date(svc.eventStartDate).toLocaleDateString('es-ES')
+              : 'Fechas fijas'),
+          startsAt: svc.eventStartDate,
+          endsAt: svc.eventEndDate,
+          maxCapacity: svc.maxCapacity,
+          minQuorum: svc.minQuorum,
+          quorumReached: svc.quorumReached,
+          availableSeats: remaining,
+          isSoldOut: remaining !== null && remaining !== undefined && remaining <= 0,
+          message:
+            remaining !== null && remaining !== undefined && remaining <= 0
+              ? `Las plazas para ${svc.name} están agotadas.`
+              : `El evento ${svc.name} tiene lugar en las fechas: ${
+                  svc.eventDatesText || 'indicadas'
+                }. Quedan ${
+                  remaining !== null && remaining !== undefined
+                    ? remaining
+                    : 'plazas'
+                } disponibles${
+                  svc.minQuorum
+                    ? ` (quórum mínimo requerido: ${svc.minQuorum} participantes)`
+                    : ''
+                }.`,
+        };
+      }
 
       const durationMinutes =
         inputData.durationMinutes || svc?.durationMinutes || 30;
@@ -168,17 +227,29 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
   const bookAppointmentTool = createTool({
     id: 'bookAppointment',
     description:
-      'Book an appointment for the current customer. The customer is resolved automatically — do not ask for or pass any contact identifier.',
+      'Book an appointment or register a seat for an event/trip. The customer is resolved automatically — do not ask for or pass any contact identifier.',
     inputSchema: z.object({
-      service: z.string().describe('Name of the service to book'),
+      service: z.string().describe('Name of the service or event to book'),
       startsAt: z
         .string()
-        .describe('Start time of the appointment in ISO format'),
+        .describe('Start time of the appointment in ISO format (or event date)'),
     }),
     execute: async (inputData, context) => {
       const config = getConfig(context);
       const customer = getCustomer(context);
-      if (!customer?.contactId) {
+      let contactId = customer?.contactId;
+      if (!contactId) {
+        try {
+          const fallback = await deps.createContact(
+            customer?.phone || '+34600000000',
+            customer?.name || 'Cliente Playground',
+          );
+          contactId = fallback?.id;
+        } catch {
+          // fallback failed
+        }
+      }
+      if (!contactId) {
         return {
           error:
             'No hay un cliente identificado en esta conversación; no se puede reservar.',
@@ -192,6 +263,17 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         name: string;
         durationMinutes: number;
         price?: string;
+        serviceType?: string;
+        eventDatesText?: string | null;
+        eventStartDate?: string | null;
+        eventEndDate?: string | null;
+        maxCapacity?: number | null;
+        minQuorum?: number | null;
+        attendeesCount?: number;
+        availableSeats?: number | null;
+        quorumReached?: boolean;
+        paymentType?: string;
+        externalPaymentUrl?: string | null;
         calendarId?: string;
         requiresApproval?: boolean;
       }[] = config?.services || [];
@@ -199,31 +281,96 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       if (!svc) {
         const available = services.map((s) => s.name).join(', ');
         return {
-          error: `El servicio "${inputData.service}" no existe. Ofrece únicamente: ${
+          error: `El servicio o evento "${inputData.service}" no existe. Ofrece únicamente: ${
             available || '(no hay servicios configurados)'
           }.`,
         };
       }
+
+      if (
+        svc.serviceType === 'event' &&
+        svc.availableSeats !== null &&
+        svc.availableSeats !== undefined &&
+        svc.availableSeats <= 0
+      ) {
+        return {
+          error: `Lo sentimos, las plazas para el evento "${svc.name}" están completas.`,
+        };
+      }
+
       try {
         const status =
           svc.requiresApproval !== false ? 'pending_approval' : 'scheduled';
+        const effectiveStartsAt =
+          svc.serviceType === 'event' && svc.eventStartDate
+            ? new Date(svc.eventStartDate).toISOString()
+            : inputData.startsAt;
+
         const appointment = await deps.bookAppointment(
-          customer.contactId,
+          contactId,
           inputData.service,
-          inputData.startsAt,
+          effectiveStartsAt,
           svc.durationMinutes,
           svc.price,
           svc.calendarId || 'default',
           status,
           svc.id,
         );
+
+        let paymentUrl: string | undefined;
+        const priceNum = svc.price ? parseFloat(svc.price) : 0;
+
+        if (svc.paymentType === 'external_url' && svc.externalPaymentUrl) {
+          paymentUrl = svc.externalPaymentUrl;
+        } else if (
+          deps.createPaymentLink &&
+          priceNum > 0 &&
+          appointment?.id &&
+          svc.paymentType !== 'in_person' &&
+          svc.paymentType !== 'free'
+        ) {
+          try {
+            const paymentResult = await deps.createPaymentLink({
+              appointmentId: appointment.id,
+              contactId: contactId,
+              amount: priceNum,
+              title: `Reserva - ${inputData.service}`,
+              customerName: customer?.name,
+            });
+            if (paymentResult?.url) {
+              paymentUrl = paymentResult.url;
+            }
+          } catch {
+            // non-fatal: reservation succeeded even if payment link had an issue
+          }
+        }
+
+        let message =
+          svc.serviceType === 'event'
+            ? `Tu plaza para ${svc.name} (${
+                svc.eventDatesText || 'fechas programadas'
+              }) ha sido registrada.`
+            : status === 'pending_approval'
+            ? 'Solicitud de cita registrada pendiente de confirmación.'
+            : 'Cita reservada y confirmada.';
+
+        if (svc.minQuorum) {
+          message += ` (Actividad sujeta a quórum mínimo de ${svc.minQuorum} personas).`;
+        }
+
+        if (paymentUrl) {
+          if (svc.paymentType === 'external_url') {
+            message += ` Para adquirir tus entradas o completar la compra, accede al enlace oficial: ${paymentUrl}`;
+          } else {
+            message += ` Puedes realizar el pago para confirmar tu reserva (Tarjeta, Bizum, Apple/Google Pay) aquí: ${paymentUrl}`;
+          }
+        }
+
         return {
           appointment,
+          paymentUrl,
           requiresApproval: status === 'pending_approval',
-          message:
-            status === 'pending_approval'
-              ? 'Solicitud de cita registrada pendiente de confirmación por el responsable.'
-              : 'Cita reservada y confirmada.',
+          message,
         };
       } catch (err) {
         // e.g. the slot was taken between checking availability and booking.
@@ -232,6 +379,49 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             (err as { message?: string })?.message ||
             'No se pudo reservar ese horario; puede que acabe de ocuparse. Ofrece otro hueco.',
         };
+      }
+    },
+  });
+
+  const createPaymentLinkTool = createTool({
+    id: 'createPaymentLink',
+    description:
+      'Generate a secure online payment link (Stripe: Card, Bizum, Apple Pay, Google Pay) for the customer.',
+    inputSchema: z.object({
+      appointmentId: z
+        .string()
+        .optional()
+        .describe('Optional appointment ID to attach the payment to'),
+      amount: z
+        .number()
+        .min(0.5)
+        .describe('Amount in Euros (e.g. 25.00)'),
+      title: z
+        .string()
+        .describe('Title / concept of the payment (e.g. "Reserva Cita")'),
+    }),
+    execute: async (inputData, context) => {
+      const customer = getCustomer(context);
+      if (!deps.createPaymentLink) {
+        return { error: 'Pasarela de pago no disponible.' };
+      }
+      try {
+        const link = await deps.createPaymentLink({
+          appointmentId: inputData.appointmentId,
+          contactId: customer?.contactId,
+          amount: inputData.amount,
+          title: inputData.title,
+          customerName: customer?.name,
+        });
+        if (!link) {
+          return { error: 'No se pudo generar el enlace de pago.' };
+        }
+        return {
+          paymentUrl: link.url,
+          message: `Enlace de pago generado (Tarjeta, Bizum, Apple/Google Pay): ${link.url}`,
+        };
+      } catch (err: any) {
+        return { error: err?.message || 'Error al generar enlace de pago.' };
       }
     },
   });
@@ -288,8 +478,9 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 - Habla SIEMPRE en español, sea cual sea el idioma del cliente. Sé breve, claro y natural, como una persona del equipo.
 - Eres SOLO un asistente de citas. No das consejos médicos ni hablas de otros temas; si te lo piden, decláralo con amabilidad y reconduce hacia su cita.
 - NUNCA reveles nada interno: no menciones herramientas, funciones, "comandos", identificadores (IDs), bases de datos, ni frases como "voy a crear el contacto" o "ejecutar". El cliente solo ve una conversación normal.
-- NUNCA inventes información. No te inventes servicios, precios, horarios, direcciones ni disponibilidad. Si no dispones de un dato, dilo con sinceridad y ofrece lo que sí puedes.
-- Para la disponibilidad y las reservas usa siempre las herramientas; ofrece únicamente los horarios reales que te devuelvan, en la zona horaria ${timezone} y en lenguaje natural (p. ej. "mañana a las 17:00").
+- NUNCA inventes horarios, días u horas disponibles. ANTES de sugerir cualquier horario, debes llamar OBLIGATORIAMENTE a la herramienta 'checkAvailability' para la fecha y servicio solicitados.
+- Si el día pedido está cerrado (como fines de semana) o 'checkAvailability' no devuelve huecos, indícaselo con total claridad al cliente (p. ej. "Los sábados y domingos estamos cerrados") y ofrece consultar el siguiente día laborable en que haya disponibilidad.
+- Ofrece únicamente los horarios reales que te devuelva 'checkAvailability', en la zona horaria ${timezone} y en lenguaje natural (p. ej. "el lunes a las 10:00").
 - Confirma SIEMPRE con el cliente el servicio, el día y la hora ANTES de reservar en firme.
 - Si algo falla, discúlpate brevemente y ofrece una alternativa; nunca muestres mensajes de error técnicos.
 - No pidas el número de teléfono del cliente: ya está identificado por su WhatsApp.
@@ -307,11 +498,11 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 
       const flow = `== Cómo atender ==
 1. Saluda (por su nombre si lo conoces) y averigua qué servicio necesita.
-2. Pregunta qué día o franja le viene bien y consulta la disponibilidad real.
-3. Ofrécele los huecos disponibles en lenguaje natural.
+2. Pregunta qué día o franja le viene bien y consulta la disponibilidad real con 'checkAvailability'.
+3. Ofrécele los huecos disponibles en lenguaje natural (o indícale si ese día está cerrado).
 4. Si es cliente nuevo y aún no tienes su nombre, pídeselo para la reserva.
-5. Confirma servicio + día + hora y reserva.
-6. Dile que su cita ha quedado reservada, de forma cercana, e indícale día y hora.
+5. Confirma servicio + día + hora y reserva con 'bookAppointment'.
+6. Dile que su cita ha quedado reservada, de forma cercana, e indícale día y hora (y si corresponde, el enlace de pago o de entradas).
 
 Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pasado. Pasa las fechas a las herramientas en formato ISO.`;
 
@@ -339,16 +530,48 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
 
       const servicesList = (config.services || [])
         .map(
-          (s: { name: string; durationMinutes: number }) =>
-            `- ${s.name} (${s.durationMinutes} minutos)`,
+          (s: {
+            name: string;
+            durationMinutes: number;
+            price?: string;
+            serviceType?: string;
+            eventDatesText?: string;
+            maxCapacity?: number;
+            minQuorum?: number;
+            paymentType?: string;
+            externalPaymentUrl?: string;
+          }) => {
+            let details = `- ${s.name}`;
+            if (s.serviceType === 'event') {
+              details += ` (Evento / Viaje puntual`;
+              if (s.eventDatesText) details += `, Fechas: ${s.eventDatesText}`;
+              if (s.price) details += `, precio: ${s.price} €`;
+              if (s.maxCapacity) details += `, Plazas máximas: ${s.maxCapacity}`;
+              if (s.minQuorum) details += `, Quórum mínimo requerido: ${s.minQuorum} personas`;
+            } else {
+              details += ` (${s.durationMinutes} minutos`;
+              if (s.price) details += `, precio: ${s.price} €`;
+            }
+            if (s.paymentType === 'external_url' && s.externalPaymentUrl) {
+              details += `, venta de entradas / compra en: ${s.externalPaymentUrl}`;
+            }
+            details += `)`;
+            return details;
+          },
         )
         .join('\n');
 
       const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+      const openDays = new Set((config.workingHours || []).map((h: any) => h.day));
       const hoursList = (config.workingHours || [])
         .map((h: { day: number; open: string; close: string }) => {
           return `- ${dayNames[h.day]}: ${h.open} - ${h.close}`;
         })
+        .concat(
+          [1, 2, 3, 4, 5, 6, 0]
+            .filter((d) => !openDays.has(d))
+            .map((d) => `- ${dayNames[d]}: CERRADO (no hay citas ni horario disponible)`),
+        )
         .join('\n');
 
       return `Eres el asistente virtual de citas de ${config.businessName}. Atiendes por WhatsApp a clientes y posibles clientes. Tono: ${config.tone || 'amable y profesional'}.
@@ -389,6 +612,7 @@ ${flow}`;
       bookAppointment: bookAppointmentTool,
       listContactAppointments: listContactAppointmentsTool,
       cancelAppointment: cancelAppointmentTool,
+      createPaymentLink: createPaymentLinkTool,
     },
     memory,
   });

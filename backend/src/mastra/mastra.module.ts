@@ -5,8 +5,10 @@ import { Memory } from '@mastra/memory';
 import { PostgresStore } from '@mastra/pg';
 import { ContactsModule } from '../contacts/contacts.module';
 import { AppointmentsModule } from '../appointments/appointments.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { ContactsService } from '../contacts/contacts.service';
 import { AppointmentsService } from '../appointments/appointments.service';
+import { PaymentsService } from '../payments/payments.service';
 import { createBookingAgent, TEMPLATE_AGENT_ID } from './booking-agent';
 
 export { NestMastraModule };
@@ -15,11 +17,13 @@ export { NestMastraModule };
   imports: [
     ContactsModule,
     AppointmentsModule,
+    PaymentsModule,
     NestMastraModule.registerAsync({
-      imports: [ContactsModule, AppointmentsModule],
+      imports: [ContactsModule, AppointmentsModule, PaymentsModule],
       useFactory: (
         contactsService: ContactsService,
         appointmentsService: AppointmentsService,
+        paymentsService: PaymentsService,
       ) => {
         const databaseUrl =
           process.env.DATABASE_URL ||
@@ -105,6 +109,17 @@ export { NestMastraModule };
           cancelAppointment: async (appointmentId: string) => {
             return appointmentsService.cancelAppointment(appointmentId);
           },
+          createPaymentLink: traced('createPaymentLink', async (params) => {
+            return paymentsService.createCheckoutSession({
+              appointmentId: params.appointmentId,
+              contactId: params.contactId,
+              amount: params.amount,
+              title: params.title,
+              description: params.description,
+              customerName: params.customerName,
+              customerEmail: params.customerEmail,
+            });
+          }),
         };
 
         const agent = createBookingAgent(deps, memory);
@@ -116,7 +131,7 @@ export { NestMastraModule };
 
         return { mastra };
       },
-      inject: [ContactsService, AppointmentsService],
+      inject: [ContactsService, AppointmentsService, PaymentsService],
     }),
   ],
   exports: [NestMastraModule],

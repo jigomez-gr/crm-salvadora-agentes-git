@@ -1,4 +1,4 @@
-﻿import {
+import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
@@ -9,6 +9,18 @@
   Index,
 } from 'typeorm';
 import { User } from './user.entity';
+
+export enum ServicePaymentType {
+  STRIPE = 'stripe',
+  EXTERNAL_URL = 'external_url',
+  IN_PERSON = 'in_person',
+  FREE = 'free',
+}
+
+export enum ServiceType {
+  RECURRING = 'recurring',
+  EVENT = 'event',
+}
 
 @Entity('services')
 export class Service {
@@ -22,11 +34,50 @@ export class Service {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
+  @Column({
+    type: 'varchar',
+    default: ServiceType.RECURRING,
+  })
+  serviceType: string;
+
+  // Fixed dates for events/trips/retreats (e.g. "Del 25 al 28 de Octubre de 2026")
+  @Column({ type: 'text', nullable: true })
+  eventDatesText: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  eventStartDate: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  eventEndDate: Date | null;
+
+  // Maximum capacity / seats limit
+  @Column({ type: 'int', nullable: true })
+  maxCapacity: number | null;
+
+  // Minimum quorum needed for the event to happen
+  @Column({ type: 'int', nullable: true })
+  minQuorum: number | null;
+
+  // Quorum confirmation deadline
+  @Column({ type: 'timestamptz', nullable: true })
+  quorumDeadline: Date | null;
+
   @Column({ type: 'int', default: 30 })
   durationMinutes: number;
 
   @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
   price: string | null;
+
+  // Payment method: 'stripe' | 'external_url' | 'in_person' | 'free'
+  @Column({
+    type: 'varchar',
+    default: ServicePaymentType.STRIPE,
+  })
+  paymentType: string;
+
+  // External ticketing / payment URL (e.g. Giglon, Eventbrite)
+  @Column({ type: 'text', nullable: true })
+  externalPaymentUrl: string | null;
 
   // Calendar identifier for multi-calendar support
   @Index()
@@ -46,6 +97,11 @@ export class Service {
 
   @Column({ default: true })
   isActive: boolean;
+
+  // Computed/transient fields for events
+  attendeesCount?: number;
+  availableSeats?: number | null;
+  quorumReached?: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

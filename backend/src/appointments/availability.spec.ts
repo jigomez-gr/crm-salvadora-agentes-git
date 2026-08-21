@@ -1,6 +1,10 @@
 import { computeFreeSlots } from './availability';
 import { WorkingHourSlot } from '../common/entities/agent-config.entity';
-import { Appointment, AppointmentStatus } from '../common/entities/appointment.entity';
+import {
+  Appointment,
+  AppointmentStatus,
+  PaymentStatus,
+} from '../common/entities/appointment.entity';
 
 const workingHours: WorkingHourSlot[] = [
   { day: 1, open: '09:00', close: '17:00' }, // Monday
@@ -27,6 +31,11 @@ function makeAppt(
     agentKey: null,
     notes: null,
     price: null,
+    paymentStatus: PaymentStatus.UNPAID,
+    stripeSessionId: null,
+    stripePaymentIntentId: null,
+    paymentUrl: null,
+    paidAt: null,
     acceptedAt: null,
     acceptedBy: null,
     cancelledAt: null,

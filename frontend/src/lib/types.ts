@@ -17,8 +17,20 @@ export interface Service {
   id?: string;
   name: string;
   description?: string | null;
+  serviceType?: "recurring" | "event";
+  eventDatesText?: string | null;
+  eventStartDate?: string | null;
+  eventEndDate?: string | null;
+  maxCapacity?: number | null;
+  minQuorum?: number | null;
+  quorumDeadline?: string | null;
+  attendeesCount?: number;
+  availableSeats?: number | null;
+  quorumReached?: boolean;
   durationMinutes: number;
   price?: string | null;
+  paymentType?: "stripe" | "external_url" | "in_person" | "free";
+  externalPaymentUrl?: string | null;
   calendarId?: string;
   managerId?: string | null;
   manager?: User | null;
@@ -99,6 +111,8 @@ export interface ContactWithAppointments extends Contact {
   appointments: Appointment[];
 }
 
+export type PaymentStatus = "unpaid" | "pending" | "paid" | "refunded" | "exempt";
+
 export interface Appointment {
   id: string;
   contactId: string;
@@ -112,9 +126,25 @@ export interface Appointment {
   notes?: string | null;
   // Optional list price (numeric → string), for revenue reporting.
   price?: string | null;
+  paymentStatus?: PaymentStatus;
+  stripeSessionId?: string | null;
+  stripePaymentIntentId?: string | null;
+  paymentUrl?: string | null;
+  paidAt?: string | null;
   acceptedAt?: string | null;
   acceptedBy?: string | null;
   cancellationReason?: string | null;
+}
+
+export interface PaymentConfig {
+  hasPublishableKey: boolean;
+  publishableKey: string | null;
+  hasSecretKey: boolean;
+  hasWebhookSecret: boolean;
+  currency: string;
+  enableBizum: boolean;
+  enableCard: boolean;
+  webhookUrl: string;
 }
 
 export interface DashboardMetrics {
