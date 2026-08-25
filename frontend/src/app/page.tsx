@@ -246,8 +246,14 @@ function RecentConversations({
   conversations: Conversation[];
   loading: boolean;
 }) {
-  const channelLabel = (channel: "whatsapp" | "playground") =>
-    channel === "whatsapp" ? "WhatsApp" : "Playground";
+  const channelLabel = (channel: string) =>
+    channel === "whatsapp"
+      ? "WhatsApp"
+      : channel === "widget"
+      ? "Widget Web"
+      : channel === "playground"
+      ? "Playground"
+      : channel;
 
   return (
     <ChartCard title="Conversaciones recientes" href="/conversations">

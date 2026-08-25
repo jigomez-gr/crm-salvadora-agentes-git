@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ShieldAlert, Upload, Trash2, Bot, Mail, Send, CreditCard, Copy, Check } from "lucide-react";
+import { ShieldAlert, Upload, Trash2, Bot, Mail, Send, CreditCard, Copy, Check, Video } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { readableTextColor } from "@/lib/color";
-import { AppSettings, EmailConfig, PaymentConfig } from "@/lib/types";
+import { AppSettings, EmailConfig, PaymentConfig, CalcomConfig } from "@/lib/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranding } from "@/contexts/BrandingContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -491,6 +491,155 @@ function PaymentCard() {
   );
 }
 
+// ─── Cal.com (Virtual Meetings & Video Sync) configuration ─────────────────────
+
+function CalcomCard() {
+  const toast = useToast();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [tick, setTick] = useState(0);
+
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [baseUrl, setBaseUrl] = useState("https://api.cal.com/v1");
+  const [enabled, setEnabled] = useState(true);
+  const [defaultEventTypeId, setDefaultEventTypeId] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<CalcomConfig>("/api/calcom/config")
+      .then((data) => {
+        if (cancelled) return;
+        setHasApiKey(data.hasApiKey);
+        setBaseUrl(data.baseUrl || "https://api.cal.com/v1");
+        setEnabled(data.enabled ?? true);
+        setDefaultEventTypeId(data.defaultEventTypeId ? String(data.defaultEventTypeId) : "");
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const payload: Record<string, any> = {
+        baseUrl: baseUrl.trim() || "https://api.cal.com/v1",
+        enabled,
+        defaultEventTypeId: defaultEventTypeId.trim() || undefined,
+      };
+      if (apiKey !== null) {
+        payload.apiKey = apiKey;
+      }
+      const updated = await apiFetch<CalcomConfig>("/api/calcom/config", {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      setHasApiKey(updated.hasApiKey);
+      setApiKey(null);
+      setTick((t) => t + 1);
+      toast.success("Configuración de Cal.com guardada");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al guardar Cal.com");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTest() {
+    setTesting(true);
+    try {
+      const res = await apiFetch<{ success: boolean; message: string }>("/api/calcom/test", {
+        method: "POST",
+      });
+      if (res.success) {
+        toast.success(res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Error al probar conexión con Cal.com");
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  const labelCls = "mb-1 block text-xs font-medium text-neutral-700";
+
+  return (
+    <div className="mt-6 max-w-xl rounded-xl border border-neutral-200 bg-white p-6">
+      <div className="flex items-center gap-2">
+        <Video className="h-4 w-4 text-indigo-600" />
+        <h2 className="text-sm font-semibold text-neutral-800">
+          Integración con Cal.com (Citas Virtuales)
+        </h2>
+      </div>
+      <p className="mt-1 text-xs text-neutral-500">
+        Sincroniza las citas virtuales automáticamente con Cal.com usando el correo del responsable del servicio y generando enlaces de videollamada para clientes y profesionales.
+      </p>
+
+      <div className="mt-4 space-y-4">
+        <SecretInput
+          key={`calcom-key-${tick}`}
+          label="API Key de Cal.com"
+          placeholder="cal_live_... o tu clave de API"
+          hasValue={hasApiKey}
+          value={apiKey}
+          onChange={setApiKey}
+          hint="Puedes obtener tu API Key en Cal.com → Settings → Developer → API Keys."
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={labelCls}>URL Base de la API</label>
+            <Input
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder="https://api.cal.com/v1"
+            />
+          </div>
+          <div>
+            <label className={labelCls}>ID de Evento Predeterminado (opcional)</label>
+            <Input
+              type="text"
+              value={defaultEventTypeId}
+              onChange={(e) => setDefaultEventTypeId(e.target.value)}
+              placeholder="ej. 129482 o UUID de evento"
+            />
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+            className="h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          Habilitar sincronización automática con Cal.com para citas virtuales
+        </label>
+
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <Button onClick={handleSave} disabled={saving}>
+            <Upload className="h-4 w-4" />
+            {saving ? "Guardando…" : "Guardar Cal.com"}
+          </Button>
+
+          <Button variant="secondary" onClick={handleTest} disabled={testing || !hasApiKey}>
+            <Send className="h-4 w-4" />
+            {testing ? "Probando…" : "Probar conexión"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const branding = useBranding();
@@ -682,6 +831,9 @@ export default function SettingsPage() {
 
       {/* Stripe & Bizum Payments */}
       <PaymentCard />
+
+      {/* Cal.com (Virtual Meetings & Video) */}
+      <CalcomCard />
 
       {/* Danger zone */}
       <div className="mt-6 max-w-xl rounded-xl border border-red-200 bg-red-50/40 p-6">

@@ -19,6 +19,7 @@ import { KnowledgeChunk } from './common/entities/knowledge-chunk.entity';
 import { EmailAccount } from './common/entities/email-account.entity';
 import { EmailMessage } from './common/entities/email-message.entity';
 import { PaymentAccount } from './common/entities/payment-account.entity';
+import { CalcomAccount } from './common/entities/calcom-account.entity';
 import { Service } from './common/entities/service.entity';
 import { ContactsModule } from './contacts/contacts.module';
 import { AppointmentsModule } from './appointments/appointments.module';
@@ -38,6 +39,7 @@ import { SettingsModule } from './settings/settings.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
 import { EmailModule } from './email/email.module';
 import { PaymentsModule } from './payments/payments.module';
+import { CalcomModule } from './calcom/calcom.module';
 import { AgentsModule } from './agents/agents.module';
 // IMPORTANT: AgentsModule (which imports AppMastraModule with NestMastraModule) MUST be last.
 // NestMastraModule mounts catch-all routes under /api; importing it earlier returns 404s
@@ -72,6 +74,7 @@ import { AgentsModule } from './agents/agents.module';
         EmailAccount,
         EmailMessage,
         PaymentAccount,
+        CalcomAccount,
       ],
       migrations: [join(__dirname, 'migrations', '*.{js,ts}')],
       // DEV: derive the schema from the entities for a zero-config experience.
@@ -98,6 +101,8 @@ import { AgentsModule } from './agents/agents.module';
     EmailModule,
     // Payments (Stripe Checkout, Bizum, Webhooks) — Mastra-free, before AgentsModule
     PaymentsModule,
+    // Cal.com integration — Mastra-free, before AgentsModule
+    CalcomModule,
     EventsModule,
     WhatsappModule,
     SeedModule,

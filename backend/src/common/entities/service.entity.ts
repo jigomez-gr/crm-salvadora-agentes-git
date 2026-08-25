@@ -44,6 +44,14 @@ export class Service {
   @Column({ type: 'text', nullable: true })
   eventDatesText: string | null;
 
+  // Recurring schedule description (e.g. "Lunes y Miércoles de 12:00 a 13:00")
+  @Column({ type: 'text', nullable: true })
+  scheduleText: string | null;
+
+  // Flyer / promotional graphic image URL
+  @Column({ type: 'text', nullable: true })
+  flyerUrl: string | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   eventStartDate: Date | null;
 
@@ -94,6 +102,18 @@ export class Service {
 
   @Column({ default: true })
   requiresApproval: boolean;
+
+  // Allowed appointment modalities: 'in_person' | 'phone' | 'virtual'
+  @Column({ type: 'jsonb', default: '["in_person"]' })
+  allowedModalities: string[];
+
+  // Whether booking this service demands asking the customer for the reason/motivation
+  @Column({ default: false })
+  requiresReason: boolean;
+
+  // Optional custom Cal.com event type ID for virtual bookings
+  @Column({ type: 'int', nullable: true })
+  calEventTypeId: number | null;
 
   @Column({ default: true })
   isActive: boolean;

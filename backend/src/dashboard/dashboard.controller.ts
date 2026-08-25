@@ -5,6 +5,8 @@ import { AgentsConfigService } from '../agents/agents-config.service';
 import { MessagesService } from '../conversations/messages.service';
 import { PipelineStage } from '../contacts/pipeline';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser, AuthUser } from '../auth/current-user.decorator';
+import { UserRole } from '../common/entities/user.entity';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard)
@@ -17,7 +19,9 @@ export class DashboardController {
   ) {}
 
   @Get('metrics')
-  async getMetrics() {
+  async getMetrics(@CurrentUser() user: AuthUser) {
+    const managerId = user.role === UserRole.SERVICE_MANAGER ? user.id : undefined;
+
     const [
       contactsCount,
       appointmentsToday,
@@ -28,9 +32,9 @@ export class DashboardController {
       newLeads,
     ] = await Promise.all([
       this.contactsService.count(),
-      this.appointmentsService.countToday(),
-      this.appointmentsService.findUpcoming(5),
-      this.appointmentsService.countPending(),
+      this.appointmentsService.countToday(undefined, managerId),
+      this.appointmentsService.findUpcoming(5, managerId),
+      this.appointmentsService.countPending(managerId),
       this.agentsConfigService.findAll(),
       this.messagesService.inboxCounts(),
       this.contactsService.countByPipelineStage(PipelineStage.NEW),

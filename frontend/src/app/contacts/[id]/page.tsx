@@ -15,9 +15,11 @@ import {
   CreditCard,
   Copy,
   ExternalLink,
+  Video,
+  Paperclip,
 } from "lucide-react";
 import Link from "next/link";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch, ApiError, apiUrl } from "@/lib/api";
 import {
   ContactWithAppointments,
   Appointment,
@@ -31,6 +33,8 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Modal } from "@/components/ui/Modal";
+import { ResponseDocumentModal } from "@/components/ResponseDocumentModal";
+import { ImageCropModal, SPECIALTIES, SpecialtyType } from "@/components/ImageCropModal";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -58,13 +62,15 @@ export default function ContactDetailPage({
   const [busy, setBusy] = useState(false);
   const [anonOpen, setAnonOpen] = useState(false);
 
-  // Email
   const [emailStatus, setEmailStatus] = useState<EmailStatus | null>(null);
   const [emails, setEmails] = useState<EmailMessage[]>([]);
   const [emailOpen, setEmailOpen] = useState(false);
   const [subject, setSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [sending, setSending] = useState(false);
+  const [selectedDocAppt, setSelectedDocAppt] = useState<Appointment | null>(null);
+  const [aiCropAppt, setAiCropAppt] = useState<Appointment | null>(null);
+  const [aiSpecialty, setAiSpecialty] = useState<SpecialtyType>("dental");
 
   useEffect(() => {
     apiFetch<ContactWithAppointments>(`/api/contacts/${id}`)
@@ -323,7 +329,11 @@ export default function ContactDetailPage({
             Próximas citas ({upcoming.length})
           </h2>
         </div>
-        <AppointmentList appointments={upcoming} />
+        <AppointmentList
+          appointments={upcoming}
+          onOpenDoc={(a) => setSelectedDocAppt({ ...a, contact })}
+          onOpenAiCrop={(a) => setAiCropAppt(a)}
+        />
       </div>
 
       <div className="mt-6">
@@ -333,8 +343,39 @@ export default function ContactDetailPage({
             Citas pasadas ({past.length})
           </h2>
         </div>
-        <AppointmentList appointments={past} />
+        <AppointmentList
+          appointments={past}
+          onOpenDoc={(a) => setSelectedDocAppt({ ...a, contact })}
+          onOpenAiCrop={(a) => setAiCropAppt(a)}
+        />
       </div>
+
+      {selectedDocAppt && (
+        <ResponseDocumentModal
+          open={Boolean(selectedDocAppt)}
+          onClose={() => setSelectedDocAppt(null)}
+          appointment={selectedDocAppt}
+          onSuccess={() => refresh()}
+        />
+      )}
+
+      {aiCropAppt && (
+        <ImageCropModal
+          open={Boolean(aiCropAppt)}
+          onClose={() => setAiCropAppt(null)}
+          selectedSpecialty={
+            (aiCropAppt.aiAnalysisType as SpecialtyType) || "dental"
+          }
+          appointmentId={aiCropAppt.id}
+          patientName={contact.name}
+          notes={aiCropAppt.reason || undefined}
+          onAnalysisSuccess={() => {
+            toast.success("Diagnóstico de IA guardado en la cita y base de datos.");
+            refresh();
+            setAiCropAppt(null);
+          }}
+        />
+      )}
 
       {/* Correos enviados */}
       <div className="mt-6">
@@ -453,7 +494,15 @@ export default function ContactDetailPage({
   );
 }
 
-function AppointmentList({ appointments }: { appointments: Appointment[] }) {
+function AppointmentList({
+  appointments,
+  onOpenDoc,
+  onOpenAiCrop,
+}: {
+  appointments: Appointment[];
+  onOpenDoc?: (a: Appointment) => void;
+  onOpenAiCrop?: (a: Appointment) => void;
+}) {
   const toast = useToast();
 
   if (appointments.length === 0) {
@@ -474,8 +523,15 @@ function AppointmentList({ appointments }: { appointments: Appointment[] }) {
       {appointments.map((a) => (
         <div key={a.id} className="flex items-center justify-between gap-4 px-4 py-3">
           <div className="flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-medium text-neutral-900">{a.service}</p>
+              <Badge variant="default" className="text-[10px]">
+                {a.modality === "virtual"
+                  ? "💻 Virtual (Cal.com)"
+                  : a.modality === "phone"
+                  ? "📞 Telefónica"
+                  : "🏢 Presencial"}
+              </Badge>
               {a.paymentStatus === "paid" && (
                 <Badge variant="success">Pagado {a.price ? `(${a.price} €)` : ""}</Badge>
               )}
@@ -485,13 +541,101 @@ function AppointmentList({ appointments }: { appointments: Appointment[] }) {
               {(!a.paymentStatus || a.paymentStatus === "unpaid") && a.price && (
                 <Badge variant="default">{a.price} €</Badge>
               )}
+              {a.aiAnalysisResult && (
+                <Badge variant="success" className="bg-emerald-50 text-emerald-800 border-emerald-200 text-[10px]">
+                  ✨ IA: {a.aiAnalysisType || "Analizado"}
+                </Badge>
+              )}
+              {a.aiCroppedImageMime && (
+                <a
+                  href={apiUrl(`/api/appointments/${a.id}/ai-cropped-image`)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded bg-sky-50 border border-sky-200 px-2 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-100 transition-colors"
+                  title="Ver imagen recortada analizada por IA"
+                >
+                  📷 Foto IA
+                </a>
+              )}
+              {a.responseDocument && (
+                <Badge variant="success" className="bg-emerald-50 text-emerald-800 border-emerald-200">
+                  ✓ {a.responseDocument.title}
+                </Badge>
+              )}
+              {(a.doctorReportPdfName || a.responseDocument) && (
+                <a
+                  href={apiUrl(`/api/appointments/${a.id}/doctor-report/pdf`)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                  title="Abrir PDF Oficial del Doctor"
+                >
+                  <FileText className="h-3 w-3" />
+                  PDF Informe
+                </a>
+              )}
+              {a.patientAttachmentName && (
+                <a
+                  href={apiUrl(`/api/appointments/${a.id}/patient-attachment/view`)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded bg-purple-50 border border-purple-200 px-2 py-0.5 text-[10px] font-semibold text-purple-700 hover:bg-purple-100 transition-colors"
+                  title={`Ver adjunto del paciente: ${a.patientAttachmentName}`}
+                >
+                  <Paperclip className="h-3 w-3 text-purple-600" />
+                  {a.patientAttachmentName}
+                </a>
+              )}
             </div>
-            <p className="text-xs text-neutral-500">
+            <p className="text-xs text-neutral-500 mt-0.5">
               {format(parseISO(a.startsAt), "d 'de' MMM, HH:mm", { locale: es })} →{" "}
               {format(parseISO(a.endsAt), "HH:mm", { locale: es })}
             </p>
+            {a.reason && (
+              <p className="text-xs text-neutral-600 mt-1 italic">
+                Motivo: &quot;{a.reason}&quot;
+              </p>
+            )}
+            {a.aiAnalysisResult && (
+              <div className="mt-1.5 rounded-lg bg-emerald-50/70 border border-emerald-200 p-2 text-xs text-emerald-900 max-w-xl">
+                <span className="font-bold text-[11px] block text-emerald-800">Diagnóstico IA registrado:</span>
+                <p className="text-[11px] line-clamp-2 mt-0.5 text-neutral-700">{a.aiAnalysisResult}</p>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
+            {onOpenAiCrop && (
+              <button
+                type="button"
+                onClick={() => onOpenAiCrop(a)}
+                className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                title="Tomar foto con cámara web, recortar y re-analizar con IA"
+              >
+                🔬 IA Cámara
+              </button>
+            )}
+            {onOpenDoc && (
+              <button
+                type="button"
+                onClick={() => onOpenDoc(a)}
+                className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-colors"
+                title="Redactar o ver diagnóstico / informe de consulta"
+              >
+                📋 {a.responseDocument ? "Ver Informe" : "Diagnóstico"}
+              </button>
+            )}
+            {a.calMeetingUrl && (
+              <a
+                href={a.calMeetingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
+                title="Unirse a la videollamada de Cal.com"
+              >
+                <Video className="h-3.5 w-3.5 text-indigo-600" />
+                Videollamada
+              </a>
+            )}
             {a.paymentUrl && a.paymentStatus !== "paid" && (
               <button
                 type="button"
@@ -510,3 +654,4 @@ function AppointmentList({ appointments }: { appointments: Appointment[] }) {
     </div>
   );
 }
+

@@ -204,8 +204,12 @@ function Column({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+import { useAuth } from "@/contexts/AuthContext";
+import { ShieldAlert } from "lucide-react";
+
 export default function PipelinePage() {
   const router = useRouter();
+  const { user } = useAuth();
   const toast = useToast();
   const [columns, setColumns] = useState<Columns>(emptyColumns);
   const [loading, setLoading] = useState(true);
@@ -369,6 +373,24 @@ export default function PipelinePage() {
     (n, s) => n + columns[s].length,
     0,
   );
+
+  if (user && user.role === "service_manager") {
+    return (
+      <div className="p-4 sm:p-8">
+        <div className="flex items-start gap-3 rounded-xl border border-yellow-200 bg-yellow-50 p-5">
+          <ShieldAlert className="mt-0.5 h-5 w-5 flex-shrink-0 text-yellow-600" />
+          <div>
+            <h1 className="text-sm font-semibold text-neutral-900">
+              Acceso restringido
+            </h1>
+            <p className="mt-1 text-sm text-neutral-600">
+              El embudo global de captación de leads es gestionado por administración comercial. Puedes consultar tus pacientes en Contactos o tu Calendario de citas.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col p-4 sm:p-8">

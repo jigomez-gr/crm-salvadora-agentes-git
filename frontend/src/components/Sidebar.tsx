@@ -17,6 +17,7 @@ import {
   Settings,
   LogOut,
   KeyRound,
+  Globe,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -29,13 +30,14 @@ import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 
 const baseNavItems = [
   { href: "/", label: "Inicio", icon: LayoutDashboard },
+  { href: "/calendar", label: "Citas y Calendario", icon: CalendarDays },
   { href: "/contacts", label: "Contactos", icon: Users },
   { href: "/pipeline", label: "Embudo", icon: KanbanSquare },
-  { href: "/calendar", label: "Calendario", icon: CalendarDays },
   { href: "/services", label: "Servicios", icon: Sparkles },
   { href: "/conversations", label: "Conversaciones", icon: MessageSquare },
   { href: "/agents", label: "Agentes", icon: Bot },
   { href: "/reports", label: "Informes", icon: BarChart3 },
+  { href: "/demo-landing", label: "Demo Landing", icon: Globe },
 ];
 
 export function Sidebar({
@@ -52,16 +54,24 @@ export function Sidebar({
   const branding = useBranding();
   const [pwModalOpen, setPwModalOpen] = useState(false);
 
-  // The admin-only sections (the API enforces it too).
-  const navItems =
-    user?.role === "admin"
-      ? [
-          ...baseNavItems,
-          { href: "/users", label: "Usuarios", icon: ShieldCheck },
-          { href: "/audit", label: "Auditoría", icon: ScrollText },
-          { href: "/settings", label: "Ajustes", icon: Settings },
-        ]
-      : baseNavItems;
+  // The role-specific navigation items
+  let navItems = baseNavItems;
+  if (user?.role === "admin") {
+    navItems = [
+      ...baseNavItems,
+      { href: "/users", label: "Usuarios", icon: ShieldCheck },
+      { href: "/audit", label: "Auditoría", icon: ScrollText },
+      { href: "/settings", label: "Ajustes", icon: Settings },
+    ];
+  } else if (user?.role === "service_manager") {
+    navItems = [
+      { href: "/", label: "Inicio", icon: LayoutDashboard },
+      { href: "/calendar", label: "Mis Citas / Calendario", icon: CalendarDays },
+      { href: "/services", label: "Servicios / Calendarios", icon: Sparkles },
+      { href: "/contacts", label: "Contactos / Pacientes", icon: Users },
+      { href: "/users", label: "Usuarios", icon: ShieldCheck },
+    ];
+  }
 
   async function handleLogout() {
     await logout();
@@ -144,7 +154,11 @@ export function Sidebar({
               {user?.name ?? "—"}
             </p>
             <p className="truncate text-[11px] text-neutral-400">
-              {user?.role === "admin" ? "Administrador" : "Empleado"}
+              {user?.role === "admin"
+                ? "Administrador"
+                : user?.role === "service_manager"
+                  ? "Responsable de Citas"
+                  : "Empleado"}
             </p>
           </div>
         </div>

@@ -52,45 +52,49 @@ export class AgentsConfigService implements OnModuleInit {
   private async seedDefaultIfMissing() {
     const existing = await this.configRepo.findOne({ where: { agentKey: 'booking' } });
     if (!existing) {
-      this.logger.log('Seeding default booking agent config (centro holístico y yoga)');
+      this.logger.log('Seeding default booking agent config (centro de yoga y actividades parque granada)');
       const config = this.configRepo.create({
         agentKey: 'booking',
-        businessName: 'Centro Holístico & Escuela de Yoga Prana',
+        businessName: 'Centro de Yoga Salvadora Conesa & Club Social Parque Granada',
         businessDescription:
-          'Centro integral de desarrollo personal y bienestar. Ofrecemos clases de Yoga (Hatha, Vinyasa, Kundalini), Baños y Pujas de Gong, Terapia Gestalt individual, Talleres de Constelaciones Familiares, Encuentros de Mujeres y Retiros de Ayuno Terapéutico.',
+          'Centro de actividades, desarrollo personal, artes marciales y yoga en Fuenlabrada. Ofrecemos clases regulares de Hatha Yoga Terapéutico, Pilates, Ninjutsu, Entrenamiento Funcional, Tai Chi Chuan, Iaido (esgrima japonesa), Actividades Orientales (Daruma, Kaisai, Kobudo) y Sesiones Mensuales de Fin de Semana (Baño de Gong, Constelaciones, Chi Kung, Yoga Nidra). Todas las clases regulares cuentan con primera clase de prueba gratuita.',
         channel: 'whatsapp',
         services: [
-          { name: 'Clase de Yoga (Hatha / Vinyasa)', durationMinutes: 75 },
-          { name: 'Baño de Gong (Sonoterapia)', durationMinutes: 60 },
-          { name: 'Puja de Gong (Noche de Gong)', durationMinutes: 480 },
-          { name: 'Terapia Gestalt (Individual)', durationMinutes: 60 },
-          { name: 'Taller de Constelaciones Familiares', durationMinutes: 180 },
-          { name: 'Encuentro de Mujeres (Círculo y Retiro)', durationMinutes: 240 },
-          { name: 'Ayuno Terapéutico & Retiro Detox', durationMinutes: 360 },
+          { name: 'Hatha Yoga Terapéutico', durationMinutes: 90 },
+          { name: 'Pilates', durationMinutes: 60 },
+          { name: 'Bujinkan Budo Taijutsu / Ninjutsu', durationMinutes: 90 },
+          { name: 'Entrenamiento Funcional', durationMinutes: 60 },
+          { name: 'Actividades Orientales (Daruma, Kaisai, Kobudo)', durationMinutes: 55 },
+          { name: 'Tai Chi Chuan', durationMinutes: 90 },
+          { name: 'Iaido (Esgrima Japonesa)', durationMinutes: 60 },
+          { name: 'Sesión Mensual de Fin de Semana (Baño de Gong / Talleres)', durationMinutes: 120 },
         ],
         workingHours: [
-          { day: 1, open: '08:30', close: '21:30' }, // Lunes
-          { day: 2, open: '08:30', close: '21:30' }, // Martes
-          { day: 3, open: '08:30', close: '21:30' }, // Miércoles
-          { day: 4, open: '08:30', close: '21:30' }, // Jueves
-          { day: 5, open: '08:30', close: '21:30' }, // Viernes
+          { day: 1, open: '07:00', close: '22:00' }, // Lunes
+          { day: 2, open: '07:00', close: '22:00' }, // Martes
+          { day: 3, open: '07:00', close: '22:00' }, // Miércoles
+          { day: 4, open: '07:00', close: '22:00' }, // Jueves
+          { day: 5, open: '07:00', close: '22:00' }, // Viernes
           { day: 6, open: '09:00', close: '20:00' }, // Sábado
           { day: 0, open: '10:00', close: '14:00' }, // Domingo
         ],
-        tone: 'cálido, consciente y profesional',
+        tone: 'cálido, motivador, atento y profesional',
         customInstructions:
-          'Normas y conocimientos del Centro:\n' +
-          '1. Retiros y Eventos Especiales con quórum mínimo:\n' +
-          '   - Encuentros de Mujeres: Requieren un mínimo de 8 participantes para confirmarse.\n' +
-          '   - Ayunos Terapéuticos & Detox: Requieren un mínimo de 6 participantes. Si no se alcanza el cupo, el evento se cancela o pospone avisando con antelación y devolviendo reservas.\n' +
-          '2. Baños y Pujas de Gong:\n' +
-          '   - Baños de Gong (60 min, 35€): Relajación profunda y sonoterapia. Ropa cómoda.\n' +
-          '   - Pujas de Gong (8h noche completa, 85€): Se requiere traer esterilla, manta y cojín (zafu).\n' +
-          '3. Coordinadores por disciplina:\n' +
-          '   - Escuela de Yoga: Laura Navarro (Shakti)\n' +
-          '   - Sonoterapia y Gongs: Marcos Benítez (Vikram)\n' +
-          '   - Gestalt y Constelaciones: Dra. Elena Salgado\n' +
-          '   - Encuentros de Mujeres y Retiros de Ayuno: Silvia Morales',
+          'Directrices y Horarios Oficiales del Centro (Club Social Parque Granada / Escuela Salvadora Conesa):\n\n' +
+          '1. Promoción General: ¡PRUEBA GRATIS EN TODAS LAS CLASES! Siempre invita y anima al usuario a reservar su primera clase de prueba sin compromiso.\n\n' +
+          '2. Horarios por Actividad:\n' +
+          '   - Hatha Yoga Terapéutico: Mañanas: Martes y Jueves (9:45 y 11:15). Tardes: Martes (17:00, 18:30, 20:00), Miércoles (20:15), Jueves (16:00, 17:30, 19:00). Clases de 90 min.\n' +
+          '   - Pilates: Lunes y Miércoles de 12:00 a 13:00.\n' +
+          '   - Bujinkan Budo Taijutsu / Ninjutsu: Mañanas: Lunes y Viernes de 10:00 a 11:30 | Tardes: Lunes y Miércoles de 20:00 a 21:30.\n' +
+          '   - Entrenamiento Funcional: Mañanas: Lunes, Miércoles y Viernes de 7:15 a 8:15 | Tardes: Lunes y Miércoles de 19:00 a 20:00.\n' +
+          '   - Actividades Orientales: Martes y Jueves -> Daruma (19:00 a 19:55), Kaisai (20:00 a 20:55), Kobudo (21:00 a 21:45).\n' +
+          '   - Tai Chi Chuan: Miércoles de 17:30 a 19:00 | Viernes de 10:00 a 11:30.\n' +
+          '   - Iaido (Esgrima japonesa): Lunes de 20:00 a 21:00 | Jueves de 20:30 a 22:00.\n' +
+          '   - Sesiones Mensuales en Fin de Semana: Baño de Gong, Constelaciones Familiares, Taller de Chi Kung, Masajes, Meditación y Yoga Nidra.\n\n' +
+          '3. Ubicación y Contacto:\n' +
+          '   - Dirección: Club Social Parque Granada (Cafetería Bar • Entrada libre), Calle Holanda 1, Fuenlabrada.\n' +
+          '   - WhatsApp Reservas: 695 172 625 | Cafetería: 624 26 73 45.\n\n' +
+          '4. Proceso de Reserva: Pide al usuario su nombre y teléfono (o confírmalo), pregúntale qué día y turno (mañana/tarde) le va mejor y confirma su plaza para la clase de prueba gratuita.',
         model: DEFAULT_MODEL,
         whatsappNumber: process.env.YCLOUD_WHATSAPP_NUMBER || undefined,
         enabled: true,

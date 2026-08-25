@@ -133,8 +133,12 @@ function downloadReportCsv(report: ReportSummary) {
   URL.revokeObjectURL(url);
 }
 
+import { useAuth } from "@/contexts/AuthContext";
+import { ShieldAlert } from "lucide-react";
+
 export default function ReportsPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [range, setRange] = useState<RangeState>(readStoredRange);
   const [report, setReport] = useState<ReportSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -177,6 +181,24 @@ export default function ReportsPage() {
       cancelled = true;
     };
   }, [load]);
+
+  if (user && user.role === "service_manager") {
+    return (
+      <div className="p-4 sm:p-8">
+        <div className="flex items-start gap-3 rounded-xl border border-yellow-200 bg-yellow-50 p-5">
+          <ShieldAlert className="mt-0.5 h-5 w-5 flex-shrink-0 text-yellow-600" />
+          <div>
+            <h1 className="text-sm font-semibold text-neutral-900">
+              Acceso restringido
+            </h1>
+            <p className="mt-1 text-sm text-neutral-600">
+              Las analíticas globales del negocio son administradas por la dirección. Puedes consultar tus métricas de citas en tu panel de Inicio.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const a = report?.appointments;
   const c = report?.contacts;

@@ -36,6 +36,14 @@ export class CreateServiceDto {
 
   @IsString()
   @IsOptional()
+  scheduleText?: string;
+
+  @IsString()
+  @IsOptional()
+  flyerUrl?: string;
+
+  @IsString()
+  @IsOptional()
   eventStartDate?: string;
 
   @IsString()
@@ -66,6 +74,17 @@ export class CreateServiceDto {
   @IsOptional()
   requiresApproval?: boolean;
 
+  @IsOptional()
+  allowedModalities?: string[];
+
+  @IsBoolean()
+  @IsOptional()
+  requiresReason?: boolean;
+
+  @IsNumber()
+  @IsOptional()
+  calEventTypeId?: number;
+
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
@@ -87,6 +106,14 @@ export class UpdateServiceDto {
   @IsString()
   @IsOptional()
   eventDatesText?: string;
+
+  @IsString()
+  @IsOptional()
+  scheduleText?: string;
+
+  @IsString()
+  @IsOptional()
+  flyerUrl?: string;
 
   @IsString()
   @IsOptional()
@@ -136,6 +163,17 @@ export class UpdateServiceDto {
   @IsBoolean()
   @IsOptional()
   requiresApproval?: boolean;
+
+  @IsOptional()
+  allowedModalities?: string[];
+
+  @IsBoolean()
+  @IsOptional()
+  requiresReason?: boolean;
+
+  @IsNumber()
+  @IsOptional()
+  calEventTypeId?: number;
 
   @IsBoolean()
   @IsOptional()

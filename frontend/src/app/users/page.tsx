@@ -31,15 +31,18 @@ function UserModal({
   onClose,
   initial,
   isSelf,
+  currentUserRole,
   onSave,
 }: {
   open: boolean;
   onClose: () => void;
   initial?: User;
   isSelf: boolean;
+  currentUserRole?: UserRole;
   onSave: (data: UserFormData) => Promise<void>;
 }) {
   const isEdit = !!initial;
+  const isServiceManager = currentUserRole === "service_manager";
   const [form, setForm] = useState<UserFormData>(
     initial
       ? {
@@ -73,7 +76,11 @@ function UserModal({
     setSaving(true);
     setError("");
     try {
-      await onSave(form);
+      await onSave({
+        ...form,
+        // If actor is service_manager and creating or editing another user, force role to employee
+        role: isServiceManager ? (isSelf ? form.role : "employee") : form.role,
+      });
       onClose();
     } catch (err) {
       setError(
@@ -90,7 +97,7 @@ function UserModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={isEdit ? "Editar usuario" : "Nuevo usuario"}
+      title={isEdit ? (isSelf ? "Editar mi perfil" : "Editar usuario") : "Nuevo usuario"}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -169,16 +176,25 @@ function UserModal({
           <label className="mb-1 block text-xs font-medium text-neutral-700">
             Rol
           </label>
-          <select
-            className={selectClass}
-            value={form.role}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, role: e.target.value as UserRole }))
-            }
-          >
-            <option value="employee">Empleado (sin gestión de usuarios)</option>
-            <option value="admin">Administrador (acceso total)</option>
-          </select>
+          {isServiceManager ? (
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+              {isSelf
+                ? "Responsable de Citas (tu rol)"
+                : "Empleado (rol estándar permitido)"}
+            </div>
+          ) : (
+            <select
+              className={selectClass}
+              value={form.role}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, role: e.target.value as UserRole }))
+              }
+            >
+              <option value="employee">Empleado (sin gestión de usuarios)</option>
+              <option value="service_manager">Responsable de Citas / Doctor</option>
+              <option value="admin">Administrador (acceso total)</option>
+            </select>
+          )}
         </div>
         {isEdit && (
           <label className="flex items-center gap-2 text-sm text-neutral-700">
@@ -237,8 +253,12 @@ export default function UsersPage() {
     });
   }, [loadUsers]);
 
-  // Page-level guard: the API enforces admin-only, this is just a friendly UI.
-  if (currentUser && currentUser.role !== "admin") {
+  // Page-level guard: allows admin and service_manager.
+  if (
+    currentUser &&
+    currentUser.role !== "admin" &&
+    currentUser.role !== "service_manager"
+  ) {
     return (
       <div className="p-8">
         <div className="flex items-start gap-3 rounded-xl border border-yellow-200 bg-yellow-50 p-5">
@@ -248,7 +268,7 @@ export default function UsersPage() {
               Acceso restringido
             </h1>
             <p className="mt-1 text-sm text-neutral-600">
-              Solo los administradores pueden gestionar usuarios.
+              Solo los administradores y responsables pueden gestionar usuarios.
             </p>
           </div>
         </div>
@@ -312,15 +332,17 @@ export default function UsersPage() {
             sistema
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setEditing(undefined);
-            setModalOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          Nuevo usuario
-        </Button>
+        {currentUser?.role === "admin" && (
+          <Button
+            onClick={() => {
+              setEditing(undefined);
+              setModalOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Nuevo usuario
+          </Button>
+        )}
       </div>
 
       <div className="mt-5 overflow-x-auto rounded-xl border border-neutral-200 bg-white">
@@ -346,6 +368,9 @@ export default function UsersPage() {
             <tbody className="divide-y divide-neutral-100">
               {users.map((u) => {
                 const isSelf = u.id === currentUser?.id;
+                const canEdit = currentUser?.role === "admin" || isSelf;
+                const canDelete = currentUser?.role === "admin" && !isSelf;
+
                 return (
                   <tr key={u.id} className="hover:bg-neutral-50">
                     <td className="px-4 py-3 font-medium text-neutral-900">
@@ -363,8 +388,20 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <Badge variant={u.role === "admin" ? "info" : "default"}>
-                        {u.role === "admin" ? "Administrador" : "Empleado"}
+                      <Badge
+                        variant={
+                          u.role === "admin"
+                            ? "info"
+                            : u.role === "service_manager"
+                              ? "warning"
+                              : "default"
+                        }
+                      >
+                        {u.role === "admin"
+                          ? "Administrador"
+                          : u.role === "service_manager"
+                            ? "Responsable de Citas"
+                            : "Empleado"}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
@@ -377,32 +414,44 @@ export default function UsersPage() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          disabled={!canEdit}
+                          title={
+                            !canEdit
+                              ? "Solo los administradores pueden modificar a otros usuarios"
+                              : isSelf
+                                ? "Editar mi perfil"
+                                : "Editar usuario"
+                          }
                           onClick={() => {
+                            if (!canEdit) return;
                             setEditing(u);
                             setModalOpen(true);
                           }}
                         >
-                          <Pencil className="h-3.5 w-3.5" />
+                          <Pencil className={canEdit ? "h-3.5 w-3.5" : "h-3.5 w-3.5 text-neutral-300"} />
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
-                          disabled={isSelf}
+                          disabled={!canDelete}
                           title={
                             isSelf
                               ? "No puedes eliminar tu propia cuenta"
-                              : "Eliminar usuario"
+                              : !canDelete
+                                ? "Solo los administradores pueden eliminar usuarios"
+                                : "Eliminar usuario"
                           }
                           onClick={() => {
+                            if (!canDelete) return;
                             setDeleteError("");
                             setDeleteTarget(u);
                           }}
                         >
                           <Trash2
                             className={
-                              isSelf
-                                ? "h-3.5 w-3.5 text-neutral-300"
-                                : "h-3.5 w-3.5 text-red-400"
+                              canDelete
+                                ? "h-3.5 w-3.5 text-red-400"
+                                : "h-3.5 w-3.5 text-neutral-300"
                             }
                           />
                         </Button>
@@ -422,6 +471,7 @@ export default function UsersPage() {
         onClose={() => setModalOpen(false)}
         initial={editing}
         isSelf={!!editing && editing.id === currentUser?.id}
+        currentUserRole={currentUser?.role}
         onSave={handleSave}
       />
 

@@ -96,6 +96,9 @@ export class ServicesService {
       minQuorum: dto.minQuorum !== undefined ? dto.minQuorum : null,
       quorumDeadline: dto.quorumDeadline ? new Date(dto.quorumDeadline) : null,
       calendarId: dto.calendarId || generatedCalendarId,
+      allowedModalities: dto.allowedModalities || ['in_person'],
+      requiresReason: dto.requiresReason ?? false,
+      calEventTypeId: dto.calEventTypeId !== undefined ? dto.calEventTypeId : null,
       price: dto.price !== undefined ? (dto.price === '' ? null : dto.price) : null,
     });
 
@@ -132,6 +135,9 @@ export class ServicesService {
     if (dto.calendarId !== undefined) service.calendarId = dto.calendarId;
     if (dto.managerId !== undefined) service.managerId = dto.managerId || null;
     if (dto.requiresApproval !== undefined) service.requiresApproval = dto.requiresApproval;
+    if (dto.allowedModalities !== undefined) service.allowedModalities = dto.allowedModalities;
+    if (dto.requiresReason !== undefined) service.requiresReason = dto.requiresReason;
+    if (dto.calEventTypeId !== undefined) service.calEventTypeId = dto.calEventTypeId;
     if (dto.isActive !== undefined) service.isActive = dto.isActive;
 
     const saved = await this.serviceRepo.save(service);

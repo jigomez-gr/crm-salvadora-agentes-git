@@ -26,6 +26,9 @@ interface ServiceFormData {
   calendarId: string;
   managerId: string;
   requiresApproval: boolean;
+  allowedModalities: string[];
+  requiresReason: boolean;
+  calEventTypeId: string;
   isActive: boolean;
 }
 
@@ -54,6 +57,9 @@ export default function ServicesPage() {
     calendarId: "",
     managerId: "",
     requiresApproval: false,
+    allowedModalities: ["in_person"],
+    requiresReason: false,
+    calEventTypeId: "",
     isActive: true,
   });
 
@@ -110,6 +116,9 @@ export default function ServicesPage() {
       calendarId: "",
       managerId: managers[0]?.id ?? "",
       requiresApproval: false,
+      allowedModalities: ["in_person"],
+      requiresReason: false,
+      calEventTypeId: "",
       isActive: true,
     });
     setError("");
@@ -132,6 +141,9 @@ export default function ServicesPage() {
       calendarId: svc.calendarId ?? "",
       managerId: svc.managerId ?? "",
       requiresApproval: Boolean(svc.requiresApproval),
+      allowedModalities: svc.allowedModalities?.length ? svc.allowedModalities : ["in_person"],
+      requiresReason: Boolean(svc.requiresReason),
+      calEventTypeId: svc.calEventTypeId ? String(svc.calEventTypeId) : "",
       isActive: svc.isActive ?? true,
     });
     setError("");
@@ -146,6 +158,10 @@ export default function ServicesPage() {
     }
     if (form.durationMinutes <= 0) {
       setError("La duración debe ser mayor a 0 minutos.");
+      return;
+    }
+    if (form.allowedModalities.length === 0) {
+      setError("Debes seleccionar al menos una modalidad admitida (Presencial, Telefónica o Virtual).");
       return;
     }
 
@@ -166,6 +182,9 @@ export default function ServicesPage() {
       calendarId: form.calendarId.trim() || undefined,
       managerId: form.managerId || undefined,
       requiresApproval: form.requiresApproval,
+      allowedModalities: form.allowedModalities,
+      requiresReason: form.requiresReason,
+      calEventTypeId: form.calEventTypeId.trim() ? Number(form.calEventTypeId) : undefined,
       isActive: form.isActive,
     };
 
@@ -208,10 +227,10 @@ export default function ServicesPage() {
           </p>
         </div>
 
-        {user?.role === "admin" && (
+        {(user?.role === "admin" || user?.role === "service_manager") && (
           <Button onClick={openCreate} className="flex items-center gap-1.5">
             <Plus className="h-4 w-4" />
-            Nuevo Servicio
+            Nuevo Servicio / Calendario
           </Button>
         )}
       </div>
@@ -372,6 +391,37 @@ export default function ServicesPage() {
                       {s.manager?.name || "Sin asignar"}
                     </span>
                   </div>
+
+                  <div className="flex items-center justify-between text-neutral-600">
+                    <span className="flex items-center gap-1.5">
+                      <Tag className="h-3.5 w-3.5 text-neutral-400" />
+                      Modalidades:
+                    </span>
+                    <div className="flex flex-wrap gap-1 justify-end">
+                      {(s.allowedModalities && s.allowedModalities.length > 0
+                        ? s.allowedModalities
+                        : ["in_person"]
+                      ).map((m) => (
+                        <span
+                          key={m}
+                          className="inline-flex items-center rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 border border-indigo-100"
+                        >
+                          {m === "in_person"
+                            ? "🏢 Presencial"
+                            : m === "phone"
+                            ? "📞 Telefónica"
+                            : "💻 Virtual"}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {s.requiresReason && (
+                    <div className="flex items-center gap-1 rounded bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-800 border border-blue-200">
+                      <AlertCircle className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                      Requiere motivo de consulta
+                    </div>
+                  )}
 
                   {s.requiresApproval && (
                     <div className="mt-1 flex items-center gap-1 rounded bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 border border-amber-200">
@@ -573,6 +623,108 @@ export default function ServicesPage() {
               onChange={(e) => setForm((f) => ({ ...f, calendarId: e.target.value }))}
               placeholder="ej. cal-yoga"
             />
+          </div>
+
+          {/* Modalidades de Cita Admitidas */}
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-3 space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-indigo-950">
+                Modalidades de Cita Admitidas <span className="text-red-500">*</span>
+              </label>
+              <p className="mb-2 text-[11px] text-indigo-700">
+                Selecciona qué formatos de atención admite este servicio (el cliente o agente podrá elegir entre ellos):
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <label className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-white p-2.5 text-xs font-medium text-neutral-800 cursor-pointer hover:bg-indigo-50/40">
+                  <input
+                    type="checkbox"
+                    className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                    checked={form.allowedModalities.includes("in_person")}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setForm((f) => ({
+                        ...f,
+                        allowedModalities: checked
+                          ? [...f.allowedModalities, "in_person"]
+                          : f.allowedModalities.filter((m) => m !== "in_person"),
+                      }));
+                    }}
+                  />
+                  <span>🏢 Presencial</span>
+                </label>
+
+                <label className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-white p-2.5 text-xs font-medium text-neutral-800 cursor-pointer hover:bg-indigo-50/40">
+                  <input
+                    type="checkbox"
+                    className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                    checked={form.allowedModalities.includes("phone")}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setForm((f) => ({
+                        ...f,
+                        allowedModalities: checked
+                          ? [...f.allowedModalities, "phone"]
+                          : f.allowedModalities.filter((m) => m !== "phone"),
+                      }));
+                    }}
+                  />
+                  <span>📞 Telefónica</span>
+                </label>
+
+                <label className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-white p-2.5 text-xs font-medium text-neutral-800 cursor-pointer hover:bg-indigo-50/40">
+                  <input
+                    type="checkbox"
+                    className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                    checked={form.allowedModalities.includes("virtual")}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setForm((f) => ({
+                        ...f,
+                        allowedModalities: checked
+                          ? [...f.allowedModalities, "virtual"]
+                          : f.allowedModalities.filter((m) => m !== "virtual"),
+                      }));
+                    }}
+                  />
+                  <span>💻 Virtual (Cal.com)</span>
+                </label>
+              </div>
+            </div>
+
+            {form.allowedModalities.includes("virtual") && (
+              <div className="pt-1 border-t border-indigo-100">
+                <label className="mb-1 block text-xs font-medium text-indigo-900">
+                  ID de Tipo de Evento en Cal.com (opcional)
+                </label>
+                <Input
+                  type="number"
+                  value={form.calEventTypeId}
+                  onChange={(e) => setForm((f) => ({ ...f, calEventTypeId: e.target.value }))}
+                  placeholder="ej. 129482 (deja vacío para usar el predeterminado)"
+                />
+                <p className="mt-1 text-[11px] text-indigo-700">
+                  Al agendarse una cita virtual, se sincronizará automáticamente con Cal.com usando el correo del responsable y se generará el enlace de la sala virtual.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Motivo de la Cita */}
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50/70 p-3">
+            <label className="flex items-start gap-2 text-xs font-medium text-neutral-800 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                checked={form.requiresReason}
+                onChange={(e) => setForm((f) => ({ ...f, requiresReason: e.target.checked }))}
+              />
+              <div>
+                <span className="font-semibold text-neutral-900">Exigir motivo / razón de la consulta</span>
+                <p className="text-[11px] font-normal text-neutral-500 mt-0.5">
+                  El agente de WhatsApp solicitará al cliente que detalle la razón o motivación de su consulta antes de reservar.
+                </p>
+              </div>
+            </label>
           </div>
 
           <div className="rounded-lg border border-neutral-200 bg-neutral-50/70 p-3 space-y-3">

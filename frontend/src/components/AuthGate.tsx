@@ -32,13 +32,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isLoginPage = pathname === "/login";
+  const isDemoLanding = pathname === "/demo-landing";
+  const isSimuladorIa = pathname?.startsWith("/simulador-ia");
+  const isPaymentPage = pathname?.startsWith("/payment-");
+  const isPublicPage = isDemoLanding || isSimuladorIa || isPaymentPage;
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     if (loading) return;
-    if (!user && !isLoginPage) router.replace("/login");
+    if (!user && !isLoginPage && !isPublicPage) router.replace("/login");
     if (user && isLoginPage) router.replace("/");
-  }, [user, loading, isLoginPage, router]);
+  }, [user, loading, isLoginPage, isPublicPage, router]);
 
   // Close the mobile drawer on Escape.
   useEffect(() => {
@@ -51,6 +55,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [mobileNavOpen]);
 
   if (loading) return <FullScreenLoader />;
+
+  if (isPublicPage) {
+    return <>{children}</>;
+  }
 
   if (isLoginPage) {
     // Authenticated users are being redirected away — avoid flashing the form.

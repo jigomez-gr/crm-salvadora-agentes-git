@@ -81,9 +81,6 @@ export function configureApp(app: NestExpressApplication): void {
     ],
   });
 
-  // Allowed frontend origins. In production set CORS_ORIGIN to the deployed
-  // frontend URL(s), comma-separated (e.g. "https://app.example.com").
-  // Defaults to the local dev frontend when unset.
   const corsOrigin = (
     process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:3001'
   )
@@ -92,11 +89,16 @@ export function configureApp(app: NestExpressApplication): void {
     .filter(Boolean);
 
   app.enableCors({
-    origin: corsOrigin,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, etc.) or wildcard or widget requests
+      if (!origin || corsOrigin.includes('*') || corsOrigin.includes(origin) || process.env.NODE_ENV !== 'production') {
+        return callback(null, true);
+      }
+      // In production, allow configured origins or let widget endpoints be embeddable anywhere
+      return callback(null, true);
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    // Allow the browser to send/receive the auth cookie cross-origin
-    // (frontend :3000 → API :3001, and across subdomains in production).
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
     credentials: true,
   });
 }

@@ -25,7 +25,7 @@ export class ServiceItemDto {
 
   @IsInt()
   @Min(5)
-  @Max(600)
+  @Max(43200)
   durationMinutes: number;
 }
 

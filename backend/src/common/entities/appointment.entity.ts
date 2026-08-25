@@ -72,9 +72,90 @@ export class Appointment {
   @Column({ nullable: true })
   agentKey: string | null;
 
+  // Appointment attendance modality: 'in_person' | 'phone' | 'virtual'
+  @Column({ default: 'in_person' })
+  modality: string;
+
+  // Customer reason/motivation for requesting the service
+  @Column({ type: 'text', nullable: true })
+  reason: string | null;
+
   // Optional internal notes about the appointment.
   @Column({ type: 'text', nullable: true })
   notes: string | null;
+
+  // ─── Response Document / Clinical Diagnosis / Consultation Outcome ───
+  @Column({ type: 'jsonb', nullable: true })
+  responseDocument?: {
+    templateKey: string;
+    title: string;
+    symptoms?: string;
+    diagnosis?: string;
+    treatment?: string;
+    recommendations?: string;
+    notes?: string;
+    customFields?: Record<string, string>;
+    issuedAt: string;
+    signedBy: string;
+  } | null;
+
+  // ─── Doctor Clinical Report PDF (BLOB) ───
+  @Column({ type: 'bytea', nullable: true, select: false })
+  doctorReportPdf: Buffer | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  doctorReportPdfName: string | null;
+
+  @Column({ type: 'varchar', nullable: true, default: 'application/pdf' })
+  doctorReportPdfMime: string | null;
+
+  @Column({ type: 'integer', nullable: true })
+  doctorReportPdfSize: number | null;
+
+  // ─── Patient Attachment Document / Media (BLOB) ───
+  @Column({ type: 'bytea', nullable: true, select: false })
+  patientAttachmentData: Buffer | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  patientAttachmentName: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  patientAttachmentMime: string | null;
+
+  @Column({ type: 'integer', nullable: true })
+  patientAttachmentSize: number | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  patientAttachmentUploadedAt: Date | null;
+
+  // ─── AI Image Analysis & Cropped Region (analizaia) ───
+  @Column({ type: 'varchar', nullable: true })
+  aiAnalysisType: string | null; // dental | dental_xray | dermatology | aesthetic | general
+
+  @Column({ type: 'text', nullable: true })
+  aiAnalysisResult: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  aiAnalysisDate: Date | null;
+
+  @Column({ type: 'bytea', nullable: true, select: false })
+  aiCroppedImageData: Buffer | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  aiCroppedImageMime: string | null;
+
+  // ─── Cal.com Virtual Meeting Sync ───
+  @Column({ type: 'varchar', nullable: true })
+  calBookingId: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  calBookingUid: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  calMeetingUrl: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  calStatus: string | null;
 
   // Optional price (for future invoicing/deposits). Stored as numeric.
   @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })

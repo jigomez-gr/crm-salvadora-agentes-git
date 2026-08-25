@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   MessageSquare,
+  Globe,
   Check,
   CheckCheck,
   Clock,
@@ -160,9 +161,13 @@ function MediaAttachment({ message }: { message: Message }) {
   }
 }
 
+import { useAuth } from "@/contexts/AuthContext";
+import { ShieldAlert } from "lucide-react";
+
 const PAGE_SIZE = 30;
 
 function ConversationsPageInner() {
+  const { user } = useAuth();
   const searchParams = useSearchParams();
   const [threads, setThreads] = useState<Conversation[]>([]);
   const [total, setTotal] = useState(0);
@@ -296,8 +301,27 @@ function ConversationsPageInner() {
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(offset + PAGE_SIZE, total);
 
-  const channelLabel = (channel: "whatsapp" | "playground") =>
-    channel === "whatsapp" ? "WhatsApp" : "Playground";
+  function ChannelBadge({ channel }: { channel: string }) {
+    if (channel === "whatsapp") {
+      return (
+        <Badge variant="success" className="gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <MessageSquare className="h-3 w-3 text-emerald-600" /> WhatsApp
+        </Badge>
+      );
+    }
+    if (channel === "widget") {
+      return (
+        <Badge variant="info" className="gap-1 bg-purple-50 text-purple-700 border border-purple-200">
+          <Globe className="h-3 w-3 text-purple-600" /> Web Landing
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="default" className="gap-1">
+        <Bot className="h-3 w-3 text-neutral-500" /> Playground
+      </Badge>
+    );
+  }
 
   async function toggleHandoff() {
     if (!selectedThread) return;
@@ -349,6 +373,24 @@ function ConversationsPageInner() {
     }
   }
 
+  if (user && user.role === "service_manager") {
+    return (
+      <div className="p-4 sm:p-8">
+        <div className="flex items-start gap-3 rounded-xl border border-yellow-200 bg-yellow-50 p-5">
+          <ShieldAlert className="mt-0.5 h-5 w-5 flex-shrink-0 text-yellow-600" />
+          <div>
+            <h1 className="text-sm font-semibold text-neutral-900">
+              Acceso restringido
+            </h1>
+            <p className="mt-1 text-sm text-neutral-600">
+              La bandeja global de mensajería multicanal es operada por agentes y atención general. Puedes consultar tus citas asignadas en el Calendario.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full overflow-hidden">
       {/* Thread list — full-width on mobile, a fixed column from md up. Hidden on
@@ -398,11 +440,7 @@ function ConversationsPageInner() {
                           <UserCog className="h-3 w-3" /> Tú
                         </Badge>
                       )}
-                      <Badge
-                        variant={t.channel === "whatsapp" ? "success" : "info"}
-                      >
-                        {channelLabel(t.channel)}
-                      </Badge>
+                      <ChannelBadge channel={t.channel} />
                     </div>
                   </div>
                   <div className="mt-0.5 flex items-center justify-between gap-1">
@@ -523,13 +561,7 @@ function ConversationsPageInner() {
                   </Button>
                 )}
                 {selectedThread && (
-                  <Badge
-                    variant={
-                      selectedThread.channel === "whatsapp" ? "success" : "info"
-                    }
-                  >
-                    {channelLabel(selectedThread.channel)}
-                  </Badge>
+                  <ChannelBadge channel={selectedThread.channel} />
                 )}
               </div>
             </div>

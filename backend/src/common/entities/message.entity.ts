@@ -17,6 +17,7 @@ export enum MessageDirection {
 export enum MessageChannel {
   WHATSAPP = 'whatsapp',
   PLAYGROUND = 'playground',
+  WIDGET = 'widget',
 }
 
 /**

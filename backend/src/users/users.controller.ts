@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -22,12 +23,12 @@ import { UserRole } from '../common/entities/user.entity';
 import { AUDIT_EVENT, AuditAction, AuditRecord } from '../audit/audit.types';
 
 /**
- * User management — ADMIN only. Guarded twice over: the user must be
- * authenticated (JwtAuthGuard) AND be an admin (RolesGuard + @Roles).
+ * User management — ADMIN and SERVICE_MANAGER. Guarded twice over: the user must be
+ * authenticated (JwtAuthGuard) AND have the required role (RolesGuard + @Roles).
  */
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN)
+@Roles(UserRole.ADMIN, UserRole.SERVICE_MANAGER)
 export class UsersController {
   constructor(
     private readonly usersService: UsersService,
@@ -54,6 +55,12 @@ export class UsersController {
     @CurrentUser() actor: AuthUser,
     @Ip() ip: string,
   ) {
+    if (actor.role !== UserRole.ADMIN) {
+      throw new ForbiddenException(
+        'Solo los administradores tienen permiso para crear nuevos usuarios.',
+      );
+    }
+
     const user = await this.usersService.create(dto);
     this.audit({
       actor: { id: actor.id, email: actor.email },
@@ -73,6 +80,17 @@ export class UsersController {
     @CurrentUser() actor: AuthUser,
     @Ip() ip: string,
   ) {
+    if (actor.role === UserRole.SERVICE_MANAGER) {
+      if (id !== actor.id) {
+        throw new ForbiddenException(
+          'Solo puedes modificar tus propios datos de usuario.',
+        );
+      }
+      if (dto.role && dto.role !== actor.role) {
+        throw new ForbiddenException('No puedes cambiar tu propio rol.');
+      }
+    }
+
     // Pass the acting admin so a self-edit isn't flagged mustChangePassword
     // while resetting another user's password is.
     const user = await this.usersService.update(id, dto, actor.id);
@@ -105,6 +123,12 @@ export class UsersController {
     @CurrentUser() actor: AuthUser,
     @Ip() ip: string,
   ) {
+    if (actor.role !== UserRole.ADMIN) {
+      throw new ForbiddenException(
+        'Solo los administradores tienen permiso para eliminar usuarios.',
+      );
+    }
+
     const { email } = await this.usersService.remove(id, actor.id);
     this.audit({
       actor: { id: actor.id, email: actor.email },

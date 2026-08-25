@@ -19,6 +19,8 @@ export interface Service {
   description?: string | null;
   serviceType?: "recurring" | "event";
   eventDatesText?: string | null;
+  scheduleText?: string | null;
+  flyerUrl?: string | null;
   eventStartDate?: string | null;
   eventEndDate?: string | null;
   maxCapacity?: number | null;
@@ -35,6 +37,9 @@ export interface Service {
   managerId?: string | null;
   manager?: User | null;
   requiresApproval?: boolean;
+  allowedModalities?: string[];
+  requiresReason?: boolean;
+  calEventTypeId?: number | null;
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -113,6 +118,19 @@ export interface ContactWithAppointments extends Contact {
 
 export type PaymentStatus = "unpaid" | "pending" | "paid" | "refunded" | "exempt";
 
+export interface AppointmentResponseDocument {
+  templateKey: "clinical_diagnosis" | "session_notes" | "general_report" | "custom" | string;
+  title: string;
+  symptoms?: string;
+  diagnosis?: string;
+  treatment?: string;
+  recommendations?: string;
+  notes?: string;
+  customFields?: Record<string, string>;
+  issuedAt: string;
+  signedBy: string;
+}
+
 export interface Appointment {
   id: string;
   contactId: string;
@@ -123,7 +141,26 @@ export interface Appointment {
   startsAt: string;
   endsAt: string;
   status: "scheduled" | "cancelled" | "completed" | "pending_approval";
+  modality?: "in_person" | "phone" | "virtual" | string;
+  reason?: string | null;
+  calBookingId?: string | null;
+  calBookingUid?: string | null;
+  calMeetingUrl?: string | null;
+  calStatus?: string | null;
   notes?: string | null;
+  responseDocument?: AppointmentResponseDocument | null;
+  doctorReportPdfName?: string | null;
+  doctorReportPdfMime?: string | null;
+  doctorReportPdfSize?: number | null;
+  patientAttachmentName?: string | null;
+  patientAttachmentMime?: string | null;
+  patientAttachmentSize?: number | null;
+  patientAttachmentUploadedAt?: string | null;
+  // ─── AI Image Analysis & Cropping (analizaia) ───
+  aiAnalysisType?: "dental" | "dental_xray" | "dermatology" | "aesthetic" | "general" | string | null;
+  aiAnalysisResult?: string | null;
+  aiAnalysisDate?: string | null;
+  aiCroppedImageMime?: string | null;
   // Optional list price (numeric → string), for revenue reporting.
   price?: string | null;
   paymentStatus?: PaymentStatus;
@@ -134,6 +171,14 @@ export interface Appointment {
   acceptedAt?: string | null;
   acceptedBy?: string | null;
   cancellationReason?: string | null;
+}
+
+export interface CalcomConfig {
+  hasApiKey: boolean;
+  apiKeyPreview: string | null;
+  baseUrl: string;
+  enabled: boolean;
+  defaultEventTypeId: string | null;
 }
 
 export interface PaymentConfig {
@@ -239,7 +284,7 @@ export type MessageStatus =
 
 export interface Conversation {
   threadId: string;
-  channel: "whatsapp" | "playground";
+  channel: "whatsapp" | "playground" | "widget" | string;
   // Human handoff: the agent stops auto-replying on this thread.
   handoff: boolean;
   // Inbound messages the operator hasn't opened yet (inbox badge).

@@ -40,6 +40,8 @@ export interface BookingAgentDeps {
     calendarId?: string,
     status?: string,
     serviceId?: string,
+    modality?: string,
+    reason?: string,
   ) => Promise<any>;
   listContactAppointments: (contactId: string) => Promise<any[]>;
   cancelAppointment: (appointmentId: string) => Promise<any>;
@@ -233,6 +235,16 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
       startsAt: z
         .string()
         .describe('Start time of the appointment in ISO format (or event date)'),
+      modality: z
+        .enum(['in_person', 'phone', 'virtual'])
+        .optional()
+        .describe(
+          'Attendance modality: "in_person" (presencial), "phone" (telefónica), or "virtual" (videollamada Cal.com)',
+        ),
+      reason: z
+        .string()
+        .optional()
+        .describe('Reason or motivation of the customer for this appointment/consultation'),
     }),
     execute: async (inputData, context) => {
       const config = getConfig(context);
@@ -276,6 +288,8 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         externalPaymentUrl?: string | null;
         calendarId?: string;
         requiresApproval?: boolean;
+        allowedModalities?: string[];
+        requiresReason?: boolean;
       }[] = config?.services || [];
       const svc = services.find((s) => s.name === inputData.service);
       if (!svc) {
@@ -306,6 +320,12 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             ? new Date(svc.eventStartDate).toISOString()
             : inputData.startsAt;
 
+        const effectiveModality =
+          inputData.modality ||
+          (svc.allowedModalities && svc.allowedModalities.length === 1
+            ? svc.allowedModalities[0]
+            : 'in_person');
+
         const appointment = await deps.bookAppointment(
           contactId,
           inputData.service,
@@ -315,6 +335,8 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
           svc.calendarId || 'default',
           status,
           svc.id,
+          effectiveModality,
+          inputData.reason,
         );
 
         let paymentUrl: string | undefined;
@@ -354,6 +376,12 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
             ? 'Solicitud de cita registrada pendiente de confirmación.'
             : 'Cita reservada y confirmada.';
 
+        if (effectiveModality === 'virtual' && appointment?.calMeetingUrl) {
+          message += ` Tu enlace de videollamada Cal.com para unirte a la cita es: ${appointment.calMeetingUrl}`;
+        } else if (effectiveModality === 'phone') {
+          message += ` (Modalidad: Consulta Telefónica).`;
+        }
+
         if (svc.minQuorum) {
           message += ` (Actividad sujeta a quórum mínimo de ${svc.minQuorum} personas).`;
         }
@@ -369,6 +397,7 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
         return {
           appointment,
           paymentUrl,
+          calMeetingUrl: appointment?.calMeetingUrl,
           requiresApproval: status === 'pending_approval',
           message,
         };
@@ -498,11 +527,13 @@ export function createBookingAgent(deps: BookingAgentDeps, memory: Memory) {
 
       const flow = `== Cómo atender ==
 1. Saluda (por su nombre si lo conoces) y averigua qué servicio necesita.
-2. Pregunta qué día o franja le viene bien y consulta la disponibilidad real con 'checkAvailability'.
-3. Ofrécele los huecos disponibles en lenguaje natural (o indícale si ese día está cerrado).
-4. Si es cliente nuevo y aún no tienes su nombre, pídeselo para la reserva.
-5. Confirma servicio + día + hora y reserva con 'bookAppointment'.
-6. Dile que su cita ha quedado reservada, de forma cercana, e indícale día y hora (y si corresponde, el enlace de pago o de entradas).
+2. Si el servicio admite más de una modalidad (presencial, telefónica, videollamada Cal.com), pregúntale cuál prefiere.
+3. Si el servicio tiene indicado [Requiere motivo de consulta], pídele con amabilidad que te indique brevemente la razón o motivo de su cita.
+4. Pregunta qué día o franja le viene bien y consulta la disponibilidad real con 'checkAvailability'.
+5. Ofrécele los huecos disponibles en lenguaje natural (o indícale si ese día está cerrado).
+6. Si es cliente nuevo y aún no tienes su nombre, pídeselo para la reserva.
+7. Confirma servicio + modalidad + motivo (si aplica) + día + hora y reserva con 'bookAppointment'.
+8. Dile que su cita ha quedado reservada, de forma cercana, e indícale día y hora (y si corresponde, el enlace de la videollamada de Cal.com o el enlace de pago).
 
 Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pasado. Pasa las fechas a las herramientas en formato ISO.`;
 
@@ -528,6 +559,12 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
         return `Eres el asistente virtual de citas de un negocio. Atiendes a clientes y posibles clientes.\n\n${rules}${customInstructionsBlock}${knowledgeBlock}\n\n${customerBlock}\n\n${flow}`;
       }
 
+      const modalityMap: Record<string, string> = {
+        in_person: 'Presencial',
+        phone: 'Telefónica',
+        virtual: 'Virtual (Cal.com)',
+      };
+
       const servicesList = (config.services || [])
         .map(
           (s: {
@@ -540,6 +577,8 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
             minQuorum?: number;
             paymentType?: string;
             externalPaymentUrl?: string;
+            allowedModalities?: string[];
+            requiresReason?: boolean;
           }) => {
             let details = `- ${s.name}`;
             if (s.serviceType === 'event') {
@@ -551,6 +590,15 @@ Fecha y hora actual: ${now} (zona ${timezone}). Nunca ofrezcas un horario ya pas
             } else {
               details += ` (${s.durationMinutes} minutos`;
               if (s.price) details += `, precio: ${s.price} €`;
+            }
+            if (s.allowedModalities && s.allowedModalities.length > 0) {
+              const modNames = s.allowedModalities
+                .map((m) => modalityMap[m] || m)
+                .join(', ');
+              details += `, Modalidades: ${modNames}`;
+            }
+            if (s.requiresReason) {
+              details += `, [Requiere motivo de consulta]`;
             }
             if (s.paymentType === 'external_url' && s.externalPaymentUrl) {
               details += `, venta de entradas / compra en: ${s.externalPaymentUrl}`;

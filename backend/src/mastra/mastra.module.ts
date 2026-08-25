@@ -89,6 +89,8 @@ export { NestMastraModule };
             calendarId?: string,
             status?: string,
             serviceId?: string,
+            modality?: string,
+            reason?: string,
           ) => {
             const start = new Date(startsAt);
             const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
@@ -101,6 +103,8 @@ export { NestMastraModule };
               calendarId: calendarId || 'default',
               status: (status as any) || undefined,
               serviceId,
+              modality,
+              reason,
             });
           }),
           listContactAppointments: async (contactId: string) => {

@@ -93,8 +93,12 @@ function CreateAgentModal({
   );
 }
 
+import { useAuth } from "@/contexts/AuthContext";
+import { ShieldAlert } from "lucide-react";
+
 export default function AgentsPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -105,6 +109,24 @@ export default function AgentsPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  if (user && user.role !== "admin") {
+    return (
+      <div className="p-4 sm:p-8">
+        <div className="flex items-start gap-3 rounded-xl border border-yellow-200 bg-yellow-50 p-5">
+          <ShieldAlert className="mt-0.5 h-5 w-5 flex-shrink-0 text-yellow-600" />
+          <div>
+            <h1 className="text-sm font-semibold text-neutral-900">
+              Acceso restringido
+            </h1>
+            <p className="mt-1 text-sm text-neutral-600">
+              Solo los administradores pueden gestionar la configuración global de agentes de IA.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-8">

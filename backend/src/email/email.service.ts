@@ -43,12 +43,32 @@ export class EmailService {
 
   /** The single email-account row, get-or-created on first access. */
   async getAccount(): Promise<EmailAccount> {
-    const [existing] = await this.accountRepo.find({
+    let [existing] = await this.accountRepo.find({
       order: { createdAt: 'ASC' },
       take: 1,
     });
-    if (existing) return existing;
-    return this.accountRepo.save(this.accountRepo.create({}));
+    if (!existing) {
+      existing = this.accountRepo.create({});
+    }
+
+    const envHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const envPort = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
+    const envUser = process.env.SMTP_USER || 'jigretera@gmail.com';
+    const envPass = process.env.SMTP_PASS || 'moulqbjwksjrzdcg';
+    const envFrom = process.env.SMTP_FROM_EMAIL || 'jigretera@gmail.com';
+    const envFromName = process.env.SMTP_FROM_NAME || 'Clínica';
+
+    if (!existing.smtpHost || !existing.smtpPassword || !existing.smtpUser) {
+      existing.smtpHost = envHost;
+      existing.smtpPort = envPort;
+      existing.smtpSecure = false;
+      existing.smtpUser = envUser;
+      existing.smtpPassword = envPass;
+      existing.fromAddress = envFrom;
+      existing.fromName = envFromName;
+      existing = await this.accountRepo.save(existing);
+    }
+    return existing;
   }
 
   /** Strip the secret; expose only whether a password is stored. */
@@ -212,5 +232,56 @@ export class EmailService {
       where: { contactId },
       order: { createdAt: 'DESC' },
     });
+  }
+
+  /**
+   * Send a rich HTML notification email to a doctor/operator with an optional attachment.
+   */
+  async sendNotification(
+    toAddress: string,
+    toName: string | null,
+    subject: string,
+    html: string,
+    text?: string,
+    attachment?: { filename: string; content: Buffer; contentType: string; cid?: string },
+  ): Promise<{ ok: boolean; messageId?: string; error?: string }> {
+    const acc = await this.getAccount();
+    if (!this.isConfigured(acc)) {
+      this.logger.warn(
+        'EmailAccount is not configured in Settings. Skipping doctor notification email.',
+      );
+      return { ok: false, error: 'SMTP no configurado en Ajustes -> Correo' };
+    }
+
+    const recipient = toName ? `"${toName.replace(/"/g, '')}" <${toAddress}>` : toAddress;
+
+    try {
+      const attachments = attachment
+        ? [
+            {
+              filename: attachment.filename,
+              content: attachment.content,
+              contentType: attachment.contentType,
+              cid: attachment.cid,
+            },
+          ]
+        : [];
+
+      const info = await this.buildTransport(acc).sendMail({
+        from: this.fromHeader(acc),
+        to: recipient,
+        subject,
+        text: text || html.replace(/<[^>]+>/g, ' '),
+        html,
+        attachments,
+      });
+
+      this.logger.log(`Doctor notification email sent to ${toAddress} (messageId: ${info.messageId})`);
+      return { ok: true, messageId: info.messageId };
+    } catch (err) {
+      const errorMsg = this.friendlyError(err);
+      this.logger.warn(`Doctor notification email failed to ${toAddress}: ${errorMsg}`);
+      return { ok: false, error: errorMsg };
+    }
   }
 }
